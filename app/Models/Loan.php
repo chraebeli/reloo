@@ -68,8 +68,13 @@ final class Loan
 
     public function returnLoan(int $loanId, int $userId): bool
     {
-        $stmt = $this->db->prepare('SELECT * FROM loans WHERE id = :id AND (lender_id = :user_id OR borrower_id = :user_id) AND status = :status LIMIT 1');
-        $stmt->execute(['id' => $loanId, 'user_id' => $userId, 'status' => 'ausgeliehen']);
+        $stmt = $this->db->prepare('SELECT * FROM loans WHERE id = :id AND (lender_id = :lender_user_id OR borrower_id = :borrower_user_id) AND status = :status LIMIT 1');
+        $stmt->execute([
+            'id' => $loanId,
+            'lender_user_id' => $userId,
+            'borrower_user_id' => $userId,
+            'status' => 'ausgeliehen',
+        ]);
         $loan = $stmt->fetch();
         if (!$loan) {
             return false;
@@ -87,8 +92,11 @@ final class Loan
 
     public function activeForUser(int $userId): array
     {
-        $stmt = $this->db->prepare('SELECT l.*, i.title, b.display_name AS borrower_name FROM loans l JOIN items i ON i.id = l.item_id JOIN users b ON b.id = l.borrower_id WHERE l.lender_id = :user_id OR l.borrower_id = :user_id ORDER BY l.created_at DESC');
-        $stmt->execute(['user_id' => $userId]);
+        $stmt = $this->db->prepare('SELECT l.*, i.title, b.display_name AS borrower_name FROM loans l JOIN items i ON i.id = l.item_id JOIN users b ON b.id = l.borrower_id WHERE l.lender_id = :lender_user_id OR l.borrower_id = :borrower_user_id ORDER BY l.created_at DESC');
+        $stmt->execute([
+            'lender_user_id' => $userId,
+            'borrower_user_id' => $userId,
+        ]);
         return $stmt->fetchAll();
     }
 
