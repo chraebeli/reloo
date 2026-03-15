@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="76" height="76" viewBox="0 0 76 76" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Reloo Monogramm</title>
+  <desc id="desc">Monogramm aus den Initialen R und L mit modularem Raster.</desc>
+  <rect x="4" y="4" width="68" height="68" rx="18" fill="#F2F5FA" stroke="#D0D9E5"/>
+  <path d="M24 54V22H40.4C46.1 22 50 25.9 50 31.3C50 35.7 47.4 38.8 43.4 40L50.8 54H43L36.8 41.2H31.2V54H24Z" fill="#132033"/>
+  <rect x="51" y="22" width="5" height="32" rx="2.5" fill="#2B5EC8"/>
+</svg>
