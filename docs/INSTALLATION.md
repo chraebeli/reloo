@@ -1,5 +1,15 @@
 # Installation auf Plesk / klassischem WordPress-Hosting
 
+> Zielumgebung: **PHP 8.4.11**, MySQL/MariaDB, Apache mit `mod_rewrite`.
+
+## Express-Setup (Plesk in 10 Minuten)
+1. Dateien in z. B. `/httpdocs/sharing-app/` hochladen.
+2. Dokumentenstamm auf `/sharing-app/public` setzen.
+3. Datenbank erstellen und `sql/schema.sql` importieren.
+4. `config/config.example.php` → `config/config.php`, Zugangsdaten eintragen.
+5. `base_path` auf `'/sharing-app'` setzen.
+6. Erstes Konto registrieren, danach per SQL Admin-Rolle vergeben.
+
 ## 1) Dateien hochladen
 - Projekt per FTP oder Plesk-Dateimanager hochladen, z. B. in `/httpdocs/sharing-app/`.
 - Wichtig: Webroot sollte auf `public/` zeigen.
@@ -36,10 +46,10 @@
 - Optional später: kleines WP-Plugin als Menü-/SSO-Bridge.
 
 ## 8) E-Mail-Benachrichtigungen
-- Standardtreiber ist `mail()`.
-- SMTP kann in `config/config.php` vorbereitet werden.
+- Standardtreiber ist `mail()` (shared-hosting-freundlich).
+- `mail_from` sollte auf eine valide Domain-Adresse gesetzt werden.
+- SMTP-Konfigurationsfelder sind vorbereitet, falls der Host SMTP erzwingt.
 
 ## 9) SEO und Performance
 - Semantische HTML-Struktur + Meta-Description bereits enthalten.
 - Für bessere SEO: eigene Landingpage im WP-Root, App für eingeloggte Mitglieder im Unterordner.
-

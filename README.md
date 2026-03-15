@@ -1,4 +1,4 @@
-# Reloo – Sharing-Kommune Webapp (PHP 8.4)
+# Reloo – Sharing-Kommune Webapp (PHP 8.4.11)
 
 Reloo ist eine produktionsnahe, shared-hosting-fähige Webanwendung für lokale Gemeinschaften (Freunde, Nachbarschaften, Hausprojekte), um Gegenstände zu teilen, zu verschenken, zu tauschen und Reparaturen zu organisieren.
 
@@ -33,7 +33,18 @@ Mehr Details: `docs/INSTALLATION.md`
 - CSRF-Token in allen mutierenden Formularen
 - `htmlspecialchars`-Escaping für Ausgabe
 - Sichere Session-Cookies (`httponly`, `samesite`, `secure` bei HTTPS)
-- Upload-Validierung (MIME + Größe + randomisierte Dateinamen)
+- Upload-Validierung (MIME + Größe + Mindestauflösung + randomisierte Dateinamen)
+- Login-Throttling bei Fehlversuchen
+- Hash-basierte, zeitlich begrenzte Passwort-Reset-Token
+
+## UX / SEO
+- Dashboard mit Quick-Actions und Empty-State-Hinweisen für bessere Orientierung
+- Semantische Struktur mit `<main>` sowie canonical URL im Layout
+- Modernes, minimalistisches Farbschema mit harmonischen Kontrasten
+
+## E-Mail-Benachrichtigungen
+- Passwort-Reset wird per E-Mail benachrichtigt
+- Anfrage-, Freigabe- und Rückgabe-Events erzeugen E-Mail- und In-App-Benachrichtigungen
 
 ## Erweiterungen (V2)
 - QR-Codes pro Gegenstand
