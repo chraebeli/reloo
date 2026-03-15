@@ -43,8 +43,15 @@ final class ItemController extends Controller
         }
 
         $itemModel = new Item($this->db);
+        $groupId = (int) $_POST['group_id'];
+
+        if (!(new \App\Models\Group($this->db))->isMember(current_user_id() ?? 0, $groupId)) {
+            Session::flash('error', 'Ungültige Gruppe oder keine Berechtigung.');
+            $this->redirect('/items/new');
+        }
+
         $itemModel->create([
-            'group_id' => (int) $_POST['group_id'],
+            'group_id' => $groupId,
             'owner_id' => current_user_id(),
             'category_id' => !empty($_POST['category_id']) ? (int) $_POST['category_id'] : null,
             'title' => $title,

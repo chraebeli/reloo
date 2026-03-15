@@ -21,12 +21,26 @@ final class RepairController extends Controller
     {
         $this->requireAuth();
         verify_csrf();
+        $itemId = (int) ($_POST['item_id'] ?? 0);
+        $issueDescription = trim($_POST['issue_description'] ?? '');
+        $userId = current_user_id() ?? 0;
+
+        if ($itemId < 1 || $issueDescription === '') {
+            Session::flash('error', 'Gegenstand und Problembeschreibung sind Pflichtfelder.');
+            $this->redirect('/repairs');
+        }
+
         $model = new Repair($this->db);
+        if (!$model->canUserAccessItem($itemId, $userId)) {
+            Session::flash('error', 'Keine Berechtigung für diesen Gegenstand.');
+            $this->redirect('/repairs');
+        }
+
         $ok = $model->create([
-            'item_id' => (int) ($_POST['item_id'] ?? 0),
-            'reported_by' => current_user_id(),
+            'item_id' => $itemId,
+            'reported_by' => $userId,
             'status' => 'gemeldet',
-            'issue_description' => trim($_POST['issue_description'] ?? ''),
+            'issue_description' => $issueDescription,
             'part_notes' => trim($_POST['part_notes'] ?? ''),
             'effort_notes' => trim($_POST['effort_notes'] ?? ''),
         ]);
@@ -46,7 +60,16 @@ final class RepairController extends Controller
             $this->redirect('/repairs');
         }
 
-        $ok = (new Repair($this->db))->updateStatus((int) ($_POST['repair_id'] ?? 0), $status);
+        $repairId = (int) ($_POST['repair_id'] ?? 0);
+        $userId = current_user_id() ?? 0;
+        $model = new Repair($this->db);
+
+        if ($repairId < 1 || !$model->canUserUpdateRepair($repairId, $userId)) {
+            Session::flash('error', 'Keine Berechtigung für diese Statusänderung.');
+            $this->redirect('/repairs');
+        }
+
+        $ok = $model->updateStatus($repairId, $status);
         Session::flash($ok ? 'success' : 'error', $ok ? 'Status aktualisiert.' : 'Statusänderung fehlgeschlagen.');
         $this->redirect('/repairs');
     }
