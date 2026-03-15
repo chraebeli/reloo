@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="xMidYMid meet" shape-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56" fill="none" role="img" aria-label="Reloo Logo">
+  <rect x="2" y="2" width="52" height="52" rx="14" fill="#E8EEF7"/>
+  <path d="M28 16C21.373 16 16 21.373 16 28C16 34.627 21.373 40 28 40C32.094 40 35.711 37.947 37.876 34.812" stroke="#2B5EC8" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M28 40C34.627 40 40 34.627 40 28C40 24.766 38.72 21.829 36.638 19.669" stroke="#1AAB8E" stroke-width="3.4" stroke-linecap="round"/>
+  <circle cx="37.1" cy="19.4" r="2.2" fill="#132033"/>
+</svg>
