@@ -91,4 +91,18 @@ final class Loan
         $stmt->execute(['user_id' => $userId]);
         return $stmt->fetchAll();
     }
+
+    public function requestNotificationData(int $itemId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT i.title, i.owner_id, u.display_name AS owner_name FROM items i JOIN users u ON u.id = i.owner_id WHERE i.id = :id LIMIT 1');
+        $stmt->execute(['id' => $itemId]);
+        return $stmt->fetch() ?: null;
+    }
+
+    public function loanNotificationData(int $loanId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT l.id, l.lender_id, l.borrower_id, i.title FROM loans l JOIN items i ON i.id = l.item_id WHERE l.id = :id LIMIT 1');
+        $stmt->execute(['id' => $loanId]);
+        return $stmt->fetch() ?: null;
+    }
 }

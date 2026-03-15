@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e(($title ?? 'Reloo') . ' | Reloo Sharing Kommune') ?></title>
     <meta name="description" content="Reloo hilft lokalen Gemeinschaften beim Teilen, Tauschen, Verschenken und Reparieren von Gegenständen.">
+    <meta name="robots" content="noindex,follow">
+    <link rel="canonical" href="<?= e((!empty($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($_SERVER['REQUEST_URI'] ?? '/')) ?>">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="<?= e(rtrim($config['app']['base_path'], '/')) ?>/styles.css" rel="stylesheet">
 </head>
@@ -19,7 +21,7 @@
             <a class="nav-link" href="<?= e(rtrim($config['app']['base_path'], '/')) ?>/groups">Gruppen</a>
             <a class="nav-link" href="<?= e(rtrim($config['app']['base_path'], '/')) ?>/loans">Ausleihen</a>
             <a class="nav-link" href="<?= e(rtrim($config['app']['base_path'], '/')) ?>/repairs">Reparaturen</a>
-            <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
+            <?php if (user_is_admin()): ?>
             <a class="nav-link" href="<?= e(rtrim($config['app']['base_path'], '/')) ?>/admin">Admin</a>
             <?php endif; ?>
             <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/logout">
@@ -30,6 +32,6 @@
         <?php endif; ?>
     </div>
 </nav>
-<div class="container pb-5">
+<main class="container pb-5">
     <?php if ($flashError): ?><div class="alert alert-danger"><?= e($flashError) ?></div><?php endif; ?>
     <?php if ($flashSuccess): ?><div class="alert alert-success"><?= e($flashSuccess) ?></div><?php endif; ?>

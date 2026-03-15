@@ -23,5 +23,6 @@ return [
         'smtp_port' => 587,
         'smtp_user' => '',
         'smtp_pass' => '',
+        'smtp_from_name' => 'Reloo',
     ],
 ];

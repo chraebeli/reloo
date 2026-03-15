@@ -12,7 +12,9 @@ CREATE TABLE users (
   password_reset_token VARCHAR(128) NULL,
   password_reset_expires_at DATETIME NULL,
   created_at DATETIME NOT NULL,
-  updated_at DATETIME NULL
+  updated_at DATETIME NULL,
+  INDEX idx_users_role_created (role, created_at),
+  INDEX idx_users_reset_expires (password_reset_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `groups` (
@@ -72,6 +74,7 @@ CREATE TABLE item_images (
   item_id INT UNSIGNED NOT NULL,
   file_path VARCHAR(255) NOT NULL,
   created_at DATETIME NOT NULL,
+  INDEX idx_item_images_item_created (item_id, created_at),
   CONSTRAINT fk_item_images_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -102,6 +105,9 @@ CREATE TABLE loans (
   returned_at DATETIME NULL,
   status ENUM('ausgeliehen','zurückgegeben') NOT NULL DEFAULT 'ausgeliehen',
   created_at DATETIME NOT NULL,
+  INDEX idx_loans_status_created (status, created_at),
+  INDEX idx_loans_lender_status (lender_id, status),
+  INDEX idx_loans_borrower_status (borrower_id, status),
   CONSTRAINT fk_loans_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
   CONSTRAINT fk_loans_request FOREIGN KEY (request_id) REFERENCES item_requests(id) ON DELETE SET NULL,
   CONSTRAINT fk_loans_lender FOREIGN KEY (lender_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -118,6 +124,7 @@ CREATE TABLE repairs (
   effort_notes TEXT NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NULL,
+  INDEX idx_repairs_status_created (status, created_at),
   CONSTRAINT fk_repairs_item FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
   CONSTRAINT fk_repairs_reported FOREIGN KEY (reported_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -131,6 +138,7 @@ CREATE TABLE notifications (
   is_read TINYINT(1) NOT NULL DEFAULT 0,
   sent_at DATETIME NULL,
   created_at DATETIME NOT NULL,
+  INDEX idx_notifications_user_read (user_id, is_read, created_at),
   CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Core\Session;
 use App\Models\Loan;
+use App\Services\Notifier;
 
 final class LoanController extends Controller
 {
@@ -38,6 +39,11 @@ final class LoanController extends Controller
             $this->redirect('/items');
         }
 
+        if (mb_strlen($message) > 1200) {
+            Session::flash('error', 'Nachricht zu lang (max. 1200 Zeichen).');
+            $this->redirect('/items/show?id=' . $itemId);
+        }
+
         if ($requestType === 'ausleihe') {
             $start = \DateTimeImmutable::createFromFormat('Y-m-d', $startDate);
             $end = \DateTimeImmutable::createFromFormat('Y-m-d', $endDate);
@@ -66,6 +72,17 @@ final class LoanController extends Controller
             'requested_end_date' => $endDate ?: null,
         ]);
 
+        if ($ok) {
+            $notificationData = $model->requestNotificationData($itemId);
+            if ($notificationData) {
+                (new Notifier($this->db, $this->config))->notifyEmail(
+                    (int) $notificationData['owner_id'],
+                    'Neue Anfrage: ' . $notificationData['title'],
+                    'Für deinen Gegenstand "' . $notificationData['title'] . '" wurde eine neue Anfrage gestellt. Bitte prüfe sie im Dashboard unter Ausleihen.'
+                );
+            }
+        }
+
         Session::flash($ok ? 'success' : 'error', $ok ? 'Anfrage gesendet.' : 'Anfrage fehlgeschlagen.');
         $this->redirect('/items/show?id=' . $itemId);
     }
@@ -76,6 +93,19 @@ final class LoanController extends Controller
         verify_csrf();
         $model = new Loan($this->db);
         $ok = $model->approveRequest((int) ($_POST['request_id'] ?? 0), current_user_id() ?? 0);
+
+        if ($ok) {
+            $loanId = (int) $this->db->lastInsertId();
+            $data = $model->loanNotificationData($loanId);
+            if ($data) {
+                (new Notifier($this->db, $this->config))->notifyEmail(
+                    (int) $data['borrower_id'],
+                    'Anfrage bestätigt: ' . $data['title'],
+                    'Deine Anfrage für "' . $data['title'] . '" wurde bestätigt. Die Ausleihe ist jetzt aktiv.'
+                );
+            }
+        }
+
         Session::flash($ok ? 'success' : 'error', $ok ? 'Anfrage bestätigt und Ausleihe gestartet.' : 'Freigabe nicht möglich.');
         $this->redirect('/loans');
     }
@@ -85,7 +115,26 @@ final class LoanController extends Controller
         $this->requireAuth();
         verify_csrf();
         $model = new Loan($this->db);
-        $ok = $model->returnLoan((int) ($_POST['loan_id'] ?? 0), current_user_id() ?? 0);
+        $loanId = (int) ($_POST['loan_id'] ?? 0);
+        $ok = $model->returnLoan($loanId, current_user_id() ?? 0);
+
+        if ($ok) {
+            $data = $model->loanNotificationData($loanId);
+            if ($data) {
+                $notifier = new Notifier($this->db, $this->config);
+                $notifier->notifyEmail(
+                    (int) $data['lender_id'],
+                    'Rückgabe erfasst: ' . $data['title'],
+                    'Die Rückgabe für "' . $data['title'] . '" wurde erfolgreich erfasst.'
+                );
+                $notifier->notifyEmail(
+                    (int) $data['borrower_id'],
+                    'Rückgabe bestätigt: ' . $data['title'],
+                    'Die Rückgabe für "' . $data['title'] . '" wurde erfolgreich abgeschlossen.'
+                );
+            }
+        }
+
         Session::flash($ok ? 'success' : 'error', $ok ? 'Rückgabe erfasst.' : 'Rückgabe nicht möglich.');
         $this->redirect('/loans');
     }
