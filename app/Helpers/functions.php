@@ -47,5 +47,15 @@ function user_is_admin(): bool
 
 function app_base_path(array $config): string
 {
-    return rtrim((string) ($config['app']['base_path'] ?? ''), '/');
+    $basePath = rtrim((string) ($config['app']['base_path'] ?? ''), '/');
+    if ($basePath === '') {
+        return '';
+    }
+
+    $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    if ($requestPath === $basePath || str_starts_with($requestPath, $basePath . '/')) {
+        return $basePath;
+    }
+
+    return '';
 }

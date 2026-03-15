@@ -9,14 +9,14 @@
       <p><strong>Eigentumsform:</strong> <?= e($item['ownership_type']) ?></p>
       <p><strong>Standort:</strong> <?= e($item['location_text'] ?? '-') ?></p>
       <?php foreach (($item['images'] ?? []) as $img): ?>
-        <img class="img-fluid rounded mb-2" src="<?= e(rtrim($config['app']['base_path'], '/') . '/' . $img['file_path']) ?>" alt="Bild von <?= e($item['title']) ?>">
+        <img class="img-fluid rounded mb-2" src="<?= e(app_base_path($config) . '/' . $img['file_path']) ?>" alt="Bild von <?= e($item['title']) ?>">
       <?php endforeach; ?>
     </div>
   </div>
   <div class="col-lg-6">
     <div class="card p-3 mb-3">
       <h2 class="h5">Anfrage senden</h2>
-      <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/loans/request">
+      <form method="post" action="<?= e(app_base_path($config)) ?>/loans/request">
         <?= csrf_field() ?>
         <input type="hidden" name="item_id" value="<?= (int)$item['id'] ?>">
         <div class="mb-2"><label class="form-label">Typ</label><select name="request_type" class="form-select"><option value="ausleihe">Ausleihe</option><option value="geschenk">Geschenk</option><option value="tausch">Tausch</option></select></div>
@@ -27,7 +27,7 @@
     </div>
     <div class="card p-3">
       <h2 class="h5">Reparatur melden</h2>
-      <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/repairs/create">
+      <form method="post" action="<?= e(app_base_path($config)) ?>/repairs/create">
         <?= csrf_field() ?>
         <input type="hidden" name="item_id" value="<?= (int)$item['id'] ?>">
         <textarea name="issue_description" class="form-control mb-2" placeholder="Was ist defekt?" required></textarea>

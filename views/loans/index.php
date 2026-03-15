@@ -7,7 +7,7 @@
       <div class="border rounded p-2 mb-2">
         <strong><?= e($req['title']) ?></strong><br>
         <small><?= e($req['requester_name']) ?> möchte anfragen</small>
-        <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/loans/approve" class="mt-2">
+        <form method="post" action="<?= e(app_base_path($config)) ?>/loans/approve" class="mt-2">
           <?= csrf_field() ?>
           <input type="hidden" name="request_id" value="<?= (int)$req['id'] ?>">
           <button class="btn btn-sm btn-primary">Bestätigen</button>
@@ -25,7 +25,7 @@
         <div>
           <span class="status-pill"><?= e($loan['status']) ?></span>
           <?php if ($loan['status'] !== 'zurückgegeben'): ?>
-          <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/loans/return" class="mt-2">
+          <form method="post" action="<?= e(app_base_path($config)) ?>/loans/return" class="mt-2">
             <?= csrf_field() ?>
             <input type="hidden" name="loan_id" value="<?= (int)$loan['id'] ?>">
             <button class="btn btn-sm btn-outline-primary">Als zurückgegeben markieren</button>

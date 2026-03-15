@@ -20,7 +20,7 @@
     <div class="card p-3 mb-3">
       <h2 class="h6">Kategorien</h2>
       <ul><?php foreach ($categories as $cat): ?><li><?= e($cat['name']) ?></li><?php endforeach; ?></ul>
-      <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/admin/categories/create">
+      <form method="post" action="<?= e(app_base_path($config)) ?>/admin/categories/create">
         <?= csrf_field() ?>
         <input class="form-control mb-2" name="name" placeholder="Neue Kategorie">
         <button class="btn btn-outline-primary">Kategorie anlegen</button>
@@ -28,7 +28,7 @@
     </div>
     <div class="card p-3">
       <h2 class="h6">Export</h2>
-      <a class="btn btn-primary" href="<?= e(rtrim($config['app']['base_path'], '/')) ?>/admin/export/csv">CSV-Export herunterladen</a>
+      <a class="btn btn-primary" href="<?= e(app_base_path($config)) ?>/admin/export/csv">CSV-Export herunterladen</a>
     </div>
   </div>
 </div>

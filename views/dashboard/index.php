@@ -22,7 +22,7 @@
       <?php else: ?>
       <ul class="list-group list-group-flush">
         <?php foreach ($recentItems as $item): ?>
-        <li class="list-group-item d-flex justify-content-between"><a href="<?= e(rtrim($config['app']['base_path'], '/')) ?>/items/show?id=<?= (int)$item['id'] ?>"><?= e($item['title']) ?></a><span class="status-pill"><?= e($item['availability_status']) ?></span></li>
+        <li class="list-group-item d-flex justify-content-between"><a href="<?= e(app_base_path($config)) ?>/items/show?id=<?= (int)$item['id'] ?>"><?= e($item['title']) ?></a><span class="status-pill"><?= e($item['availability_status']) ?></span></li>
         <?php endforeach; ?>
       </ul>
       <?php endif; ?>
