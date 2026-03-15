@@ -11,7 +11,7 @@
         <td><span class="status-pill"><?= e($repair['status']) ?></span></td>
         <td><?= e($repair['issue_description']) ?></td>
         <td>
-          <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/repairs/update-status" class="d-flex gap-2">
+          <form method="post" action="<?= e(app_base_path($config)) ?>/repairs/update-status" class="d-flex gap-2">
             <?= csrf_field() ?>
             <input type="hidden" name="repair_id" value="<?= (int)$repair['id'] ?>">
             <select name="status" class="form-select form-select-sm">

@@ -1,7 +1,7 @@
 <?php
 $flashError = \App\Core\Session::flash('error');
 $flashSuccess = \App\Core\Session::flash('success');
-$basePath = rtrim($config['app']['base_path'], '/');
+$basePath = app_base_path($config);
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
 $currentPath = '/' . ltrim(substr($path, strlen($basePath)), '/');
 $isAuthPage = in_array($title ?? '', ['Login', 'Registrierung', 'Passwort vergessen', 'Neues Passwort'], true);

@@ -21,7 +21,7 @@ abstract class Controller
 
     protected function redirect(string $path): void
     {
-        $base = rtrim($this->config['app']['base_path'], '/');
+        $base = app_base_path($this->config);
         header('Location: ' . $base . $path);
         exit;
     }

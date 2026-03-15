@@ -3,7 +3,7 @@
   <div class="col-lg-8">
     <div class="card p-4">
       <h1 class="h4 mb-3">Konto erstellen</h1>
-      <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/register">
+      <form method="post" action="<?= e(app_base_path($config)) ?>/register">
         <?= csrf_field() ?>
         <div class="row">
           <div class="col-md-6 mb-3"><label class="form-label">Name</label><input name="name" class="form-control" required></div>

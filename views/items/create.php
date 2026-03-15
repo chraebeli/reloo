@@ -1,7 +1,7 @@
 <?php $title = 'Gegenstand erfassen'; require __DIR__ . '/../layouts/header.php'; ?>
 <div class="card p-4">
   <h1 class="h4 mb-3">Gegenstand erfassen</h1>
-  <form method="post" action="<?= e(rtrim($config['app']['base_path'], '/')) ?>/items/create" enctype="multipart/form-data">
+  <form method="post" action="<?= e(app_base_path($config)) ?>/items/create" enctype="multipart/form-data">
     <?= csrf_field() ?>
     <div class="row g-3">
       <div class="col-md-6"><label class="form-label">Titel</label><input name="title" class="form-control" required></div>
