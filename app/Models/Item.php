@@ -76,6 +76,7 @@ final class Item
         return $item;
     }
 
+
     public function categories(): array
     {
         return $this->db->query('SELECT * FROM categories WHERE is_active = 1 ORDER BY name')->fetchAll();

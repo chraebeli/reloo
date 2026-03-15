@@ -24,19 +24,50 @@ final class LoanController extends Controller
     {
         $this->requireAuth();
         verify_csrf();
+
+        $itemId = (int) ($_POST['item_id'] ?? 0);
+        $requestType = trim($_POST['request_type'] ?? 'ausleihe');
+        $startDate = trim($_POST['start_date'] ?? '');
+        $endDate = trim($_POST['end_date'] ?? '');
+        $message = trim($_POST['message'] ?? '');
+        $allowedTypes = ['ausleihe', 'tausch', 'geschenk'];
+        $userId = current_user_id() ?? 0;
+
+        if ($itemId < 1 || !in_array($requestType, $allowedTypes, true)) {
+            Session::flash('error', 'Ungültige Anfrage.');
+            $this->redirect('/items');
+        }
+
+        if ($requestType === 'ausleihe') {
+            $start = \DateTimeImmutable::createFromFormat('Y-m-d', $startDate);
+            $end = \DateTimeImmutable::createFromFormat('Y-m-d', $endDate);
+            if (!$start || !$end || $start->format('Y-m-d') !== $startDate || $end->format('Y-m-d') !== $endDate || $start > $end) {
+                Session::flash('error', 'Bitte gültige Datumsangaben angeben.');
+                $this->redirect('/items/show?id=' . $itemId);
+            }
+        } else {
+            $startDate = null;
+            $endDate = null;
+        }
+
         $model = new Loan($this->db);
+        if (!$model->canRequestItem($itemId, $userId)) {
+            Session::flash('error', 'Keine Berechtigung für diese Anfrage.');
+            $this->redirect('/items/show?id=' . $itemId);
+        }
+
         $ok = $model->request([
-            'item_id' => (int) ($_POST['item_id'] ?? 0),
-            'requester_id' => current_user_id(),
-            'request_type' => trim($_POST['request_type'] ?? 'ausleihe'),
+            'item_id' => $itemId,
+            'requester_id' => $userId,
+            'request_type' => $requestType,
             'status' => 'angefragt',
-            'message' => trim($_POST['message'] ?? ''),
-            'requested_start_date' => $_POST['start_date'] ?? null,
-            'requested_end_date' => $_POST['end_date'] ?? null,
+            'message' => $message,
+            'requested_start_date' => $startDate ?: null,
+            'requested_end_date' => $endDate ?: null,
         ]);
 
         Session::flash($ok ? 'success' : 'error', $ok ? 'Anfrage gesendet.' : 'Anfrage fehlgeschlagen.');
-        $this->redirect('/items/show?id=' . (int) ($_POST['item_id'] ?? 0));
+        $this->redirect('/items/show?id=' . $itemId);
     }
 
     public function approve(): void

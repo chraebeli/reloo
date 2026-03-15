@@ -49,6 +49,14 @@ final class Group
         $stmt->execute(['group_id' => $groupId, 'user_id' => $userId, 'role' => 'admin']);
     }
 
+    public function isMember(int $userId, int $groupId): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM group_members WHERE user_id = :user_id AND group_id = :group_id LIMIT 1');
+        $stmt->execute(['user_id' => $userId, 'group_id' => $groupId]);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
     public function lastInsertId(): int
     {
         return (int) $this->db->lastInsertId();

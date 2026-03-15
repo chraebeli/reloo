@@ -18,6 +18,14 @@ final class Loan
         return $stmt->execute($data);
     }
 
+    public function canRequestItem(int $itemId, int $requesterId): bool
+    {
+        $stmt = $this->db->prepare('SELECT 1 FROM items i JOIN group_members gm ON gm.group_id = i.group_id WHERE i.id = :item_id AND gm.user_id = :requester_id AND i.owner_id <> :requester_id LIMIT 1');
+        $stmt->execute(['item_id' => $itemId, 'requester_id' => $requesterId]);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
     public function pendingForOwner(int $ownerId): array
     {
         $stmt = $this->db->prepare('SELECT ir.*, i.title, u.display_name AS requester_name FROM item_requests ir JOIN items i ON i.id = ir.item_id JOIN users u ON u.id = ir.requester_id WHERE i.owner_id = :owner_id AND ir.status = :status ORDER BY ir.created_at DESC');
@@ -32,7 +40,7 @@ final class Loan
         $reqStmt->execute(['id' => $requestId]);
         $req = $reqStmt->fetch();
 
-        if (!$req || (int) $req['owner_id'] !== $ownerId) {
+        if (!$req || (int) $req['owner_id'] !== $ownerId || $req['status'] !== 'angefragt') {
             $this->db->rollBack();
             return false;
         }
@@ -60,8 +68,8 @@ final class Loan
 
     public function returnLoan(int $loanId, int $userId): bool
     {
-        $stmt = $this->db->prepare('SELECT * FROM loans WHERE id = :id AND (lender_id = :user_id OR borrower_id = :user_id) LIMIT 1');
-        $stmt->execute(['id' => $loanId, 'user_id' => $userId]);
+        $stmt = $this->db->prepare('SELECT * FROM loans WHERE id = :id AND (lender_id = :user_id OR borrower_id = :user_id) AND status = :status LIMIT 1');
+        $stmt->execute(['id' => $loanId, 'user_id' => $userId, 'status' => 'ausgeliehen']);
         $loan = $stmt->fetch();
         if (!$loan) {
             return false;
