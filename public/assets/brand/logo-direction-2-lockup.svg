@@ -1,6 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="260" height="68" viewBox="0 0 260 68" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">Reloo Wortmarke mit abstraktem Symbol</title>
-  <desc id="desc">Geometrisch reduziertes Symbol aus kreisförmigen Umlaufsegmenten plus Wortmarke.</desc>
+<svg preserveAspectRatio="xMidYMid meet" shape-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg" width="260" height="68" viewBox="0 0 260 68" fill="none" role="img" aria-label="Reloo Logo">
   <rect x="6" y="6" width="56" height="56" rx="16" fill="#E8EEF7"/>
   <path d="M34 20C26.268 20 20 26.268 20 34C20 41.732 26.268 48 34 48C38.777 48 42.995 45.606 45.521 41.952" stroke="#2B5EC8" stroke-width="4" stroke-linecap="round"/>
   <path d="M34 48C41.732 48 48 41.732 48 34C48 30.226 46.507 26.8 44.078 24.281" stroke="#1AAB8E" stroke-width="4" stroke-linecap="round"/>

@@ -16,6 +16,7 @@ $isAuthPage = in_array($title ?? '', ['Login', 'Registrierung', 'Passwort verges
     <meta name="robots" content="noindex,follow">
     <link rel="canonical" href="<?= e((!empty($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . ($_SERVER['REQUEST_URI'] ?? '/')) ?>">
     <link rel="icon" type="image/svg+xml" href="<?= e($basePath) ?>/assets/brand/favicon.svg">
+    <link rel="shortcut icon" href="<?= e($basePath) ?>/assets/brand/favicon.svg">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="<?= e($basePath) ?>/styles.css" rel="stylesheet">
 </head>

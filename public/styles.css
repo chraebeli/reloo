@@ -19,6 +19,18 @@
   --danger-soft: #ffeceb;
   --info-soft: #e9f2ff;
 
+  /* legacy aliases for existing markup compatibility */
+  --color-bg: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-alt);
+  --color-border: var(--border);
+  --color-text: var(--text-primary);
+  --color-text-soft: var(--text-secondary);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+
+
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -96,6 +108,11 @@ a:hover {
   box-shadow: var(--shadow-sm);
   backdrop-filter: saturate(140%) blur(6px);
   padding-block: 0.72rem;
+}
+
+.navbar-brand {
+  color: var(--text-primary) !important;
+  font-weight: 640;
 }
 
 .brand-link {
@@ -208,9 +225,10 @@ a:hover {
   font-weight: 610;
 }
 
-.status-pill:has(+ form),
+/* compatibility: avoid :has selector for wider browser support */
+.status-pill + form,
 form + .status-pill {
-  margin-bottom: 0.35rem;
+  margin-top: 0.35rem;
 }
 
 form.card,

@@ -1,6 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="220" height="56" viewBox="0 0 220 56" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">Reloo Wortmarke</title>
-  <desc id="desc">Reduzierte Wortmarke mit präziser Grotesk-Anmutung.</desc>
+<svg preserveAspectRatio="xMidYMid meet" shape-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg" width="220" height="56" viewBox="0 0 220 56" fill="none" role="img" aria-label="Reloo Logo">
   <rect width="220" height="56" rx="14" fill="#F7F9FC"/>
   <text x="24" y="36" fill="#132033" font-family="Inter, Segoe UI, Arial, sans-serif" font-weight="650" font-size="28" letter-spacing="0.4">RELOO</text>
 </svg>
