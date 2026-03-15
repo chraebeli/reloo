@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Core\Session;
 use App\Models\User;
+use App\Services\Notifier;
 
 final class AuthController extends Controller
 {
@@ -18,6 +19,11 @@ final class AuthController extends Controller
     public function login(): void
     {
         verify_csrf();
+
+        if (!empty($_SESSION['login_block_until']) && time() < (int) $_SESSION['login_block_until']) {
+            Session::flash('error', 'Zu viele Fehlversuche. Bitte kurz warten und erneut versuchen.');
+            $this->redirect('/login');
+        }
 
         $email = filter_var(trim($_POST['email'] ?? ''), FILTER_VALIDATE_EMAIL);
         $password = $_POST['password'] ?? '';
@@ -31,9 +37,17 @@ final class AuthController extends Controller
         $user = $userModel->findByEmail($email);
 
         if (!$user || !password_verify($password, $user['password_hash'])) {
+            $_SESSION['login_attempts'] = (int) ($_SESSION['login_attempts'] ?? 0) + 1;
+            if ($_SESSION['login_attempts'] >= 5) {
+                $_SESSION['login_block_until'] = time() + 180;
+                $_SESSION['login_attempts'] = 0;
+            }
             Session::flash('error', 'Login fehlgeschlagen.');
             $this->redirect('/login');
         }
+
+        $_SESSION['login_attempts'] = 0;
+        unset($_SESSION['login_block_until']);
 
         session_regenerate_id(true);
         $_SESSION['user_id'] = (int) $user['id'];
@@ -102,11 +116,17 @@ final class AuthController extends Controller
             $token = bin2hex(random_bytes(24));
             $userModel->setResetToken((int) $user['id'], hash('sha256', $token), date('Y-m-d H:i:s', time() + 3600));
 
-            $resetLink = rtrim($this->config['app']['base_path'], '/') . '/password/reset?token=' . urlencode($token);
-            \App\Core\Session::flash('success', 'Reset-Link (für MVP angezeigt): ' . $resetLink);
-        } else {
-            \App\Core\Session::flash('success', 'Wenn die E-Mail existiert, wurde ein Reset-Link vorbereitet.');
+            $scheme = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $resetLink = $scheme . '://' . $host . app_base_path($this->config) . '/password/reset?token=' . urlencode($token);
+            (new Notifier($this->db, $this->config))->notifyEmail(
+                (int) $user['id'],
+                'Passwort zurücksetzen',
+                "Hallo {$user['display_name']},\n\nbitte setze dein Passwort über folgenden Link zurück:\n{$resetLink}\n\nDer Link ist 60 Minuten gültig."
+            );
         }
+
+        \App\Core\Session::flash('success', 'Wenn die E-Mail existiert, wurde ein Reset-Link versendet.');
 
         $this->redirect('/login');
     }

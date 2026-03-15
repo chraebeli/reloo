@@ -93,32 +93,60 @@ final class ItemController extends Controller
         }
 
         $allowedMimes = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+        $maxFileSize = 5 * 1024 * 1024;
+        $maxFiles = 6;
         $uploadDir = __DIR__ . '/../../uploads/items';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
 
+        $errors = [];
+        $processed = 0;
+
         foreach ($_FILES['images']['tmp_name'] as $index => $tmpPath) {
+            if ($processed >= $maxFiles) {
+                break;
+            }
+
             if (($_FILES['images']['error'][$index] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                $errors[] = 'Eine Datei konnte nicht hochgeladen werden.';
                 continue;
             }
             if (!is_uploaded_file($tmpPath)) {
+                $errors[] = 'Ungültige Upload-Quelle erkannt.';
                 continue;
             }
 
             $mime = mime_content_type($tmpPath);
             if (!isset($allowedMimes[$mime])) {
+                $errors[] = 'Nur JPG, PNG und WEBP sind erlaubt.';
                 continue;
             }
 
-            if (filesize($tmpPath) > 5 * 1024 * 1024) {
+            $size = filesize($tmpPath);
+            if ($size === false || $size > $maxFileSize) {
+                $errors[] = 'Eine Datei überschreitet das 5-MB-Limit.';
+                continue;
+            }
+
+            $imgInfo = @getimagesize($tmpPath);
+            if (!is_array($imgInfo) || ($imgInfo[0] ?? 0) < 80 || ($imgInfo[1] ?? 0) < 80) {
+                $errors[] = 'Bildauflösung zu klein (mind. 80x80 Pixel).';
                 continue;
             }
 
             $filename = bin2hex(random_bytes(16)) . '.' . $allowedMimes[$mime];
             $target = $uploadDir . '/' . $filename;
-            move_uploaded_file($tmpPath, $target);
+            if (!move_uploaded_file($tmpPath, $target)) {
+                $errors[] = 'Bild konnte nicht gespeichert werden.';
+                continue;
+            }
             $itemModel->addImage($itemId, 'uploads/items/' . $filename);
+            $processed++;
+        }
+
+        if ($errors !== []) {
+            Session::flash('error', implode(' ', array_unique($errors)));
         }
     }
 }

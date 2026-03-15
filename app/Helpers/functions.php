@@ -34,3 +34,18 @@ function current_user_id(): ?int
 {
     return isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 }
+
+function current_user_role(): string
+{
+    return (string) ($_SESSION['role'] ?? 'member');
+}
+
+function user_is_admin(): bool
+{
+    return current_user_role() === 'admin';
+}
+
+function app_base_path(array $config): string
+{
+    return rtrim((string) ($config['app']['base_path'] ?? ''), '/');
+}
