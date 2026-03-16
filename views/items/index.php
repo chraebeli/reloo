@@ -9,10 +9,10 @@
 <div class="row g-3">
 <?php foreach ($items as $item): ?>
   <div class="col-md-6 col-lg-4">
-    <div class="card h-100">
+    <div class="card h-100 item-card">
       <div class="item-preview">
         <?php if (!empty($item['image'])): ?>
-          <img src="<?= e(app_base_path($config) . '/' . $item['image']) ?>" class="item-preview__image" alt="<?= e($item['title']) ?>">
+          <img src="<?= e(app_base_path($config) . '/' . $item['image']) ?>" class="item-preview__image" alt="<?= e($item['title']) ?>" loading="lazy">
         <?php else: ?>
           <div class="item-preview__placeholder" aria-label="Kein Bild verfügbar">Kein Bild</div>
         <?php endif; ?>
