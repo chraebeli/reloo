@@ -95,7 +95,7 @@ final class ItemController extends Controller
         $allowedMimes = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
         $maxFileSize = 5 * 1024 * 1024;
         $maxFiles = 6;
-        $uploadDir = __DIR__ . '/../../uploads/items';
+        $uploadDir = __DIR__ . '/../../public/uploads/items';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
         }
