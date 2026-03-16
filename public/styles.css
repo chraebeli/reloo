@@ -190,6 +190,37 @@ a:hover {
   background: var(--surface);
 }
 
+.item-preview {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-alt);
+}
+
+.item-preview__image,
+.item-preview__placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.item-preview__image {
+  display: block;
+  object-fit: cover;
+}
+
+.item-preview__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .card h1,
 .card h2,
 .card h3,
