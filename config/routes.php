@@ -42,5 +42,6 @@ $router->post('/repairs/create', [RepairController::class, 'create']);
 $router->post('/repairs/update-status', [RepairController::class, 'updateStatus']);
 
 $router->get('/admin', [AdminController::class, 'index']);
+$router->post('/admin/users/approval', [AdminController::class, 'updateUserApproval']);
 $router->post('/admin/categories/create', [AdminController::class, 'createCategory']);
 $router->get('/admin/export/csv', [AdminController::class, 'exportCsv']);

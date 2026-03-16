@@ -42,7 +42,18 @@ final class AuthController extends Controller
                 $_SESSION['login_block_until'] = time() + 180;
                 $_SESSION['login_attempts'] = 0;
             }
-            Session::flash('error', 'Login fehlgeschlagen.');
+            Session::flash('error', 'Login fehlgeschlagen. Bitte prüfe E-Mail und Passwort.');
+            $this->redirect('/login');
+        }
+
+        $approvalStatus = $user['approval_status'] ?? 'approved';
+        if ($approvalStatus === 'pending') {
+            Session::flash('error', 'Dein Konto wurde registriert und wartet noch auf die Freigabe durch einen Administrator.');
+            $this->redirect('/login');
+        }
+
+        if ($approvalStatus === 'rejected') {
+            Session::flash('error', 'Deine Registrierung wurde aktuell nicht freigegeben. Bitte kontaktiere den Administrator.');
             $this->redirect('/login');
         }
 
@@ -91,9 +102,10 @@ final class AuthController extends Controller
             'location' => trim($_POST['location'] ?? ''),
             'bio' => trim($_POST['bio'] ?? ''),
             'role' => 'member',
+            'approval_status' => 'pending',
         ]);
 
-        Session::flash('success', 'Registrierung erfolgreich. Bitte einloggen.');
+        Session::flash('success', 'Deine Registrierung war erfolgreich. Dein Konto muss jetzt von einem Administrator freigegeben werden, bevor du dich anmelden kannst.');
         $this->redirect('/login');
     }
 
