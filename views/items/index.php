@@ -10,7 +10,13 @@
 <?php foreach ($items as $item): ?>
   <div class="col-md-6 col-lg-4">
     <div class="card h-100">
-      <?php if (!empty($item['image'])): ?><img src="<?= e(app_base_path($config) . '/' . $item['image']) ?>" class="card-img-top" alt="<?= e($item['title']) ?>"><?php endif; ?>
+      <div class="item-preview">
+        <?php if (!empty($item['image'])): ?>
+          <img src="<?= e(app_base_path($config) . '/' . $item['image']) ?>" class="item-preview__image" alt="<?= e($item['title']) ?>">
+        <?php else: ?>
+          <div class="item-preview__placeholder" aria-label="Kein Bild verfügbar">Kein Bild</div>
+        <?php endif; ?>
+      </div>
       <div class="card-body">
         <h2 class="h6"><a href="<?= e(app_base_path($config)) ?>/items/show?id=<?= (int)$item['id'] ?>"><?= e($item['title']) ?></a></h2>
         <p class="small text-muted"><?= e($item['category_name'] ?? 'Ohne Kategorie') ?> · <?= e($item['owner_name']) ?></p>
