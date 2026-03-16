@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\Session;
 use App\Models\User;
 
 final class AdminController extends Controller
@@ -13,8 +14,15 @@ final class AdminController extends Controller
     {
         $this->requireAdmin();
 
+        $userModel = new User($this->db);
+        $statusFilter = $_GET['status'] ?? '';
+        if (!in_array($statusFilter, ['pending', 'approved', 'rejected'], true)) {
+            $statusFilter = null;
+        }
+
         $stats = [
             'mitglieder' => (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn(),
+            'offene_freigaben' => (int) $this->db->query("SELECT COUNT(*) FROM users WHERE approval_status = 'pending'")->fetchColumn(),
             'gegenstaende' => (int) $this->db->query('SELECT COUNT(*) FROM items')->fetchColumn(),
             'ausleihen' => (int) $this->db->query('SELECT COUNT(*) FROM loans')->fetchColumn(),
             'verschenkt' => (int) $this->db->query("SELECT COUNT(*) FROM item_requests WHERE request_type = 'geschenk' AND status IN ('abgeschlossen', 'reserviert')")->fetchColumn(),
@@ -25,9 +33,35 @@ final class AdminController extends Controller
 
         $this->view('admin/index', [
             'stats' => $stats,
-            'users' => (new User($this->db))->all(),
+            'users' => $userModel->all($statusFilter),
+            'statusFilter' => $statusFilter,
             'categories' => $categories,
         ]);
+    }
+
+    public function updateUserApproval(): void
+    {
+        $this->requireAdmin();
+        verify_csrf();
+
+        $userId = (int) ($_POST['user_id'] ?? 0);
+        $status = $_POST['status'] ?? '';
+
+        if ($userId <= 0 || !in_array($status, ['pending', 'approved', 'rejected'], true)) {
+            Session::flash('error', 'Ungültige Freigabe-Aktion.');
+            $this->redirect('/admin');
+        }
+
+        (new User($this->db))->updateApprovalStatus($userId, $status, (int) $_SESSION['user_id']);
+
+        $statusLabel = [
+            'pending' => 'wartend',
+            'approved' => 'freigegeben',
+            'rejected' => 'abgelehnt',
+        ][$status];
+
+        Session::flash('success', 'Benutzerstatus wurde auf "' . $statusLabel . '" gesetzt.');
+        $this->redirect('/admin');
     }
 
     public function createCategory(): void

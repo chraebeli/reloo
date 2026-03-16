@@ -14,7 +14,7 @@ final class User
 
     public function create(array $data): bool
     {
-        $stmt = $this->db->prepare('INSERT INTO users (name, display_name, email, password_hash, phone, location, bio, role, created_at) VALUES (:name, :display_name, :email, :password_hash, :phone, :location, :bio, :role, NOW())');
+        $stmt = $this->db->prepare('INSERT INTO users (name, display_name, email, password_hash, phone, location, bio, role, approval_status, created_at) VALUES (:name, :display_name, :email, :password_hash, :phone, :location, :bio, :role, :approval_status, NOW())');
         return $stmt->execute($data);
     }
 
@@ -44,8 +44,39 @@ final class User
         $stmt->execute(['hash' => $hash, 'id' => $userId]);
     }
 
-    public function all(): array
+    public function all(?string $statusFilter = null): array
     {
-        return $this->db->query('SELECT id, name, display_name, email, role, location, created_at FROM users ORDER BY created_at DESC')->fetchAll();
+        $sql = 'SELECT id, name, display_name, email, role, location, approval_status, approved_at, approved_by, rejected_at, rejected_by, created_at FROM users';
+        $params = [];
+
+        if (in_array($statusFilter, ['pending', 'approved', 'rejected'], true)) {
+            $sql .= ' WHERE approval_status = :approval_status';
+            $params['approval_status'] = $statusFilter;
+        }
+
+        $sql .= ' ORDER BY created_at DESC';
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
+
+    public function updateApprovalStatus(int $userId, string $status, int $adminId): void
+    {
+        if ($status === 'approved') {
+            $stmt = $this->db->prepare('UPDATE users SET approval_status = :status, approved_at = NOW(), approved_by = :admin_id, rejected_at = NULL, rejected_by = NULL, updated_at = NOW() WHERE id = :id');
+            $stmt->execute(['status' => $status, 'admin_id' => $adminId, 'id' => $userId]);
+            return;
+        }
+
+        if ($status === 'rejected') {
+            $stmt = $this->db->prepare('UPDATE users SET approval_status = :status, rejected_at = NOW(), rejected_by = :admin_id, approved_at = NULL, approved_by = NULL, updated_at = NOW() WHERE id = :id');
+            $stmt->execute(['status' => $status, 'admin_id' => $adminId, 'id' => $userId]);
+            return;
+        }
+
+        $stmt = $this->db->prepare('UPDATE users SET approval_status = :status, approved_at = NULL, approved_by = NULL, rejected_at = NULL, rejected_by = NULL, updated_at = NOW() WHERE id = :id');
+        $stmt->execute(['status' => 'pending', 'id' => $userId]);
     }
 }

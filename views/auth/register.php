@@ -3,6 +3,7 @@
   <div class="col-lg-8">
     <div class="card p-4">
       <h1 class="h4 mb-3">Konto erstellen</h1>
+      <p class="text-muted mb-3">Nach der Registrierung wird dein Konto zunächst geprüft. Der Login ist erst nach Freigabe durch einen Administrator möglich.</p>
       <form method="post" action="<?= e(app_base_path($config)) ?>/register">
         <?= csrf_field() ?>
         <div class="row">

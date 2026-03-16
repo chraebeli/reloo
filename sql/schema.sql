@@ -8,13 +8,21 @@ CREATE TABLE users (
   location VARCHAR(120) NULL,
   bio TEXT NULL,
   role ENUM('admin','member') NOT NULL DEFAULT 'member',
+  approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'approved',
+  approved_at DATETIME NULL,
+  approved_by INT UNSIGNED NULL,
+  rejected_at DATETIME NULL,
+  rejected_by INT UNSIGNED NULL,
   email_verified_at DATETIME NULL,
   password_reset_token VARCHAR(128) NULL,
   password_reset_expires_at DATETIME NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NULL,
   INDEX idx_users_role_created (role, created_at),
-  INDEX idx_users_reset_expires (password_reset_expires_at)
+  INDEX idx_users_approval_status_created (approval_status, created_at),
+  INDEX idx_users_reset_expires (password_reset_expires_at),
+  CONSTRAINT fk_users_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_users_rejected_by FOREIGN KEY (rejected_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `groups` (
