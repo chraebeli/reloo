@@ -20,8 +20,12 @@ final class Loan
 
     public function canRequestItem(int $itemId, int $requesterId): bool
     {
-        $stmt = $this->db->prepare('SELECT 1 FROM items i JOIN group_members gm ON gm.group_id = i.group_id WHERE i.id = :item_id AND gm.user_id = :requester_id AND i.owner_id <> :requester_id LIMIT 1');
-        $stmt->execute(['item_id' => $itemId, 'requester_id' => $requesterId]);
+        $stmt = $this->db->prepare('SELECT 1 FROM items i JOIN group_members gm ON gm.group_id = i.group_id WHERE i.id = :item_id AND gm.user_id = :requester_id AND i.owner_id <> :owner_check_id LIMIT 1');
+        $stmt->execute([
+            'item_id' => $itemId,
+            'requester_id' => $requesterId,
+            'owner_check_id' => $requesterId,
+        ]);
 
         return (bool) $stmt->fetchColumn();
     }
