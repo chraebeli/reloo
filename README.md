@@ -45,6 +45,8 @@ Mehr Details: `docs/INSTALLATION.md`
 ## E-Mail-Benachrichtigungen
 - Passwort-Reset wird per E-Mail benachrichtigt
 - Anfrage-, Freigabe- und Rückgabe-Events erzeugen E-Mail- und In-App-Benachrichtigungen
+- Versand erfolgt standardmäßig über SMTP (Fallback auf `mail()` möglich)
+- Konfiguration in `config/config.php` unter `mail` (`driver`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_pass`, `smtp_encryption`)
 
 ## Erweiterungen (V2)
 - QR-Codes pro Gegenstand
