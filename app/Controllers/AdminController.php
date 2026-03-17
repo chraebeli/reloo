@@ -64,10 +64,10 @@ final class AdminController extends Controller
         try {
             $backupService = new BackupService($this->db, $this->config);
             $backup = $backupService->createBackup($adminId, $adminEmail);
-            $this->activity()->log($adminId, null, 'backup_created', 'Backup erstellt: ' . $backup['filename']);
+            $this->audit($adminId, 'backup_created', 'Backup erstellt: ' . $backup['filename']);
             Session::flash('success', 'Neues Backup erfolgreich erstellt.');
         } catch (Throwable $exception) {
-            $this->activity()->log($adminId, null, 'backup_create_failed', 'Backup-Erstellung fehlgeschlagen: ' . $exception->getMessage());
+            $this->audit($adminId, 'backup_create_failed', 'Backup-Erstellung fehlgeschlagen: ' . $exception->getMessage());
             Session::flash('error', 'Backup konnte nicht erstellt werden.');
         }
 
@@ -107,10 +107,10 @@ final class AdminController extends Controller
         try {
             $backupService = new BackupService($this->db, $this->config);
             $backupService->deleteBackup($fileName);
-            $this->activity()->log($adminId, null, 'backup_deleted', 'Backup gelöscht: ' . $fileName);
+            $this->audit($adminId, 'backup_deleted', 'Backup gelöscht: ' . $fileName);
             Session::flash('success', 'Backup wurde gelöscht.');
         } catch (Throwable $exception) {
-            $this->activity()->log($adminId, null, 'backup_delete_failed', 'Backup-Löschen fehlgeschlagen: ' . $exception->getMessage());
+            $this->audit($adminId, 'backup_delete_failed', 'Backup-Löschen fehlgeschlagen: ' . $exception->getMessage());
             Session::flash('error', 'Backup konnte nicht gelöscht werden.');
         }
 
@@ -140,15 +140,15 @@ final class AdminController extends Controller
         }
 
         $backupService = new BackupService($this->db, $this->config);
-        $this->activity()->log($adminId, null, 'backup_restore_started', 'Restore gestartet: ' . $fileName);
+        $this->audit($adminId, 'backup_restore_started', 'Restore gestartet: ' . $fileName);
 
         try {
             $backupService->restoreBackup($fileName, $createSafetyBackup, $adminId, $adminEmail);
-            $this->activity()->log($adminId, null, 'backup_restore_success', 'Restore erfolgreich: ' . $fileName);
             Session::flash('success', 'Backup erfolgreich wiederhergestellt.');
+            $this->audit($adminId, 'backup_restore_success', 'Restore erfolgreich: ' . $fileName);
         } catch (Throwable $exception) {
-            $this->activity()->log($adminId, null, 'backup_restore_failed', 'Restore fehlgeschlagen: ' . $exception->getMessage());
             Session::flash('error', 'Backup konnte nicht verarbeitet werden.');
+            $this->audit($adminId, 'backup_restore_failed', 'Restore fehlgeschlagen: ' . $exception->getMessage());
         }
 
         $this->redirect('/admin/backups');
@@ -214,6 +214,21 @@ final class AdminController extends Controller
     private function activity(): Activity
     {
         return new Activity($this->db);
+    }
+
+
+    private function audit(int $adminId, string $type, string $message): void
+    {
+        try {
+            $stmt = $this->db->prepare('SELECT id FROM users WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => $adminId]);
+            $userId = $stmt->fetchColumn();
+            $safeUserId = is_numeric($userId) ? (int) $userId : null;
+
+            $this->activity()->log($safeUserId, null, $type, $message);
+        } catch (Throwable) {
+            // Audit-Logging darf nie den Hauptprozess blockieren.
+        }
     }
 
     private function currentAdminEmail(int $adminId): string
