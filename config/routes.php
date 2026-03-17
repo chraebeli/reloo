@@ -42,6 +42,12 @@ $router->post('/repairs/create', [RepairController::class, 'create']);
 $router->post('/repairs/update-status', [RepairController::class, 'updateStatus']);
 
 $router->get('/admin', [AdminController::class, 'index']);
+
+$router->get('/admin/backups', [AdminController::class, 'backups']);
+$router->post('/admin/backups/create', [AdminController::class, 'createBackup']);
+$router->get('/admin/backups/download', [AdminController::class, 'downloadBackup']);
+$router->post('/admin/backups/delete', [AdminController::class, 'deleteBackup']);
+$router->post('/admin/backups/restore', [AdminController::class, 'restoreBackup']);
 $router->post('/admin/users/approval', [AdminController::class, 'updateUserApproval']);
 $router->post('/admin/categories/create', [AdminController::class, 'createCategory']);
 $router->get('/admin/export/csv', [AdminController::class, 'exportCsv']);

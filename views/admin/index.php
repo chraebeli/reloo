@@ -104,5 +104,13 @@ $statusBadgeClasses = [
       <a class="btn btn-primary" href="<?= e(app_base_path($config)) ?>/admin/export/csv">CSV-Export herunterladen</a>
     </div>
   </div>
+
+  <div class="col-lg-6">
+    <div class="card p-3">
+      <h2 class="h6">Backups</h2>
+      <p class="text-muted">Manuelle Sicherung, Download und Wiederherstellung.</p>
+      <a class="btn btn-outline-primary" href="<?= e(app_base_path($config)) ?>/admin/backups">Backup-Verwaltung öffnen</a>
+    </div>
+  </div>
 </div>
 <?php require __DIR__ . '/../layouts/footer.php'; ?>
