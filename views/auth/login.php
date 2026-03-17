@@ -9,7 +9,10 @@
         <div class="mb-3"><label class="form-label">Passwort</label><input type="password" name="password" class="form-control" required></div>
         <button class="btn btn-primary w-100">Einloggen</button>
       </form>
-      <a class="small mt-3" href="<?= e(app_base_path($config)) ?>/register">Noch kein Konto? Jetzt registrieren</a>
+      <div class="d-flex flex-column gap-1 mt-3">
+        <a class="small" href="<?= e(app_base_path($config)) ?>/verification/resend">Bestätigungslink erneut senden</a>
+        <a class="small" href="<?= e(app_base_path($config)) ?>/register">Noch kein Konto? Jetzt registrieren</a>
+      </div>
     </div>
   </div>
 </div>
