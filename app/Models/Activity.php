@@ -12,7 +12,7 @@ final class Activity
     {
     }
 
-    public function log(int $userId, ?int $groupId, string $type, string $message): void
+    public function log(?int $userId, ?int $groupId, string $type, string $message): void
     {
         $stmt = $this->db->prepare('INSERT INTO activity_log (user_id, group_id, activity_type, message, created_at) VALUES (:user_id, :group_id, :activity_type, :message, NOW())');
         $stmt->execute([
