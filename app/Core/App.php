@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Services\Logger;
+
 final class App
 {
     public static function run(): void
     {
+        Logger::registerHandlers();
         $config = require __DIR__ . '/../../config/config.php';
-        $db = Database::connect($config['db']);
 
         Session::start($config['app']);
+        $db = Database::connect($config['db']);
 
         $router = new Router();
         require __DIR__ . '/../../config/routes.php';

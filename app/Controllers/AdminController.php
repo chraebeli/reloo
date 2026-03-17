@@ -9,6 +9,7 @@ use App\Core\Session;
 use App\Models\Activity;
 use App\Models\User;
 use App\Services\BackupService;
+use App\Services\Logger;
 use RuntimeException;
 use Throwable;
 
@@ -64,9 +65,11 @@ final class AdminController extends Controller
         try {
             $backupService = new BackupService($this->db, $this->config);
             $backup = $backupService->createBackup($adminId, $adminEmail);
+            Logger::info('Backup created', ['admin_id' => $adminId, 'file' => (string) $backup['filename']]);
             $this->audit($adminId, 'backup_created', 'Backup erstellt: ' . $backup['filename']);
             Session::flash('success', 'Neues Backup erfolgreich erstellt.');
         } catch (Throwable $exception) {
+            Logger::error('Backup creation failed', ['admin_id' => $adminId, 'exception' => $exception->getMessage()]);
             $this->audit($adminId, 'backup_create_failed', 'Backup-Erstellung fehlgeschlagen: ' . $exception->getMessage());
             Session::flash('error', 'Backup konnte nicht erstellt werden.');
         }
@@ -84,6 +87,7 @@ final class AdminController extends Controller
         try {
             $path = $backupService->resolveBackupPath($fileName);
         } catch (Throwable) {
+            Logger::warning('Backup download failed: file not found', ['file' => $fileName]);
             http_response_code(404);
             exit('Backup nicht gefunden.');
         }
@@ -107,9 +111,11 @@ final class AdminController extends Controller
         try {
             $backupService = new BackupService($this->db, $this->config);
             $backupService->deleteBackup($fileName);
+            Logger::info('Backup deleted', ['admin_id' => $adminId, 'file' => $fileName]);
             $this->audit($adminId, 'backup_deleted', 'Backup gelöscht: ' . $fileName);
             Session::flash('success', 'Backup wurde gelöscht.');
         } catch (Throwable $exception) {
+            Logger::error('Backup delete failed', ['admin_id' => $adminId, 'file' => $fileName, 'exception' => $exception->getMessage()]);
             $this->audit($adminId, 'backup_delete_failed', 'Backup-Löschen fehlgeschlagen: ' . $exception->getMessage());
             Session::flash('error', 'Backup konnte nicht gelöscht werden.');
         }
@@ -140,13 +146,16 @@ final class AdminController extends Controller
         }
 
         $backupService = new BackupService($this->db, $this->config);
+        Logger::info('Backup restore started', ['admin_id' => $adminId, 'file' => $fileName, 'safety_backup' => $createSafetyBackup]);
         $this->audit($adminId, 'backup_restore_started', 'Restore gestartet: ' . $fileName);
 
         try {
             $backupService->restoreBackup($fileName, $createSafetyBackup, $adminId, $adminEmail);
+            Logger::info('Backup restore succeeded', ['admin_id' => $adminId, 'file' => $fileName]);
             Session::flash('success', 'Backup erfolgreich wiederhergestellt.');
             $this->audit($adminId, 'backup_restore_success', 'Restore erfolgreich: ' . $fileName);
         } catch (Throwable $exception) {
+            Logger::error('Backup restore failed', ['admin_id' => $adminId, 'file' => $fileName, 'exception' => $exception->getMessage()]);
             Session::flash('error', 'Backup konnte nicht verarbeitet werden.');
             $this->audit($adminId, 'backup_restore_failed', 'Restore fehlgeschlagen: ' . $exception->getMessage());
         }
@@ -168,6 +177,7 @@ final class AdminController extends Controller
         }
 
         (new User($this->db))->updateApprovalStatus($userId, $status, (int) $_SESSION['user_id']);
+        Logger::info('User approval status updated', ['admin_id' => (int) $_SESSION['user_id'], 'target_user_id' => $userId, 'status' => $status]);
 
         $statusLabel = [
             'pending' => 'wartend',

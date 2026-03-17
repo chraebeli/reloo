@@ -6,6 +6,7 @@ namespace App\Core;
 
 use PDO;
 use PDOException;
+use App\Services\Logger;
 
 final class Database
 {
@@ -26,6 +27,12 @@ final class Database
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
         } catch (PDOException $exception) {
+            Logger::error('Database connection failed', [
+                'exception' => $exception->getMessage(),
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
+            ]);
+
             http_response_code(500);
             exit('Datenbankverbindung fehlgeschlagen. Bitte Konfiguration prüfen.');
         }
