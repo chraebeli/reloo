@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Core;
 
+use App\Services\Logger;
 use PDO;
 
 final class Router
@@ -30,6 +31,7 @@ final class Router
         $action = $this->routes[$method][$uri] ?? null;
 
         if ($action === null) {
+            Logger::warning('Route not found', ['method' => $method, 'uri' => $uri]);
             http_response_code(404);
             echo 'Seite nicht gefunden';
             return;

@@ -7,6 +7,7 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Core\Session;
 use App\Models\User;
+use App\Services\Logger;
 use App\Services\Notifier;
 
 final class AuthController extends Controller
@@ -21,6 +22,7 @@ final class AuthController extends Controller
         verify_csrf();
 
         if (!empty($_SESSION['login_block_until']) && time() < (int) $_SESSION['login_block_until']) {
+            Logger::warning('Login blocked due to repeated failures', ['email' => (string) ($_POST['email'] ?? '')]);
             Session::flash('error', 'Zu viele Fehlversuche. Bitte kurz warten und erneut versuchen.');
             $this->redirect('/login');
         }
@@ -29,6 +31,7 @@ final class AuthController extends Controller
         $password = $_POST['password'] ?? '';
 
         if (!$email || $password === '') {
+            Logger::warning('Login failed due to invalid input');
             Session::flash('error', 'Bitte gültige Zugangsdaten angeben.');
             $this->redirect('/login');
         }
@@ -42,17 +45,20 @@ final class AuthController extends Controller
                 $_SESSION['login_block_until'] = time() + 180;
                 $_SESSION['login_attempts'] = 0;
             }
+            Logger::warning('Login failed: invalid credentials', ['email' => (string) $email]);
             Session::flash('error', 'Login fehlgeschlagen. Bitte prüfe E-Mail und Passwort.');
             $this->redirect('/login');
         }
 
         $approvalStatus = $user['approval_status'] ?? 'approved';
         if ($approvalStatus === 'pending') {
+            Logger::info('Login denied: account pending approval', ['user_id' => (int) $user['id']]);
             Session::flash('error', 'Dein Konto wurde registriert und wartet noch auf die Freigabe durch einen Administrator.');
             $this->redirect('/login');
         }
 
         if ($approvalStatus === 'rejected') {
+            Logger::warning('Login denied: account rejected', ['user_id' => (int) $user['id']]);
             Session::flash('error', 'Deine Registrierung wurde aktuell nicht freigegeben. Bitte kontaktiere den Administrator.');
             $this->redirect('/login');
         }
@@ -64,6 +70,8 @@ final class AuthController extends Controller
         $_SESSION['user_id'] = (int) $user['id'];
         $_SESSION['role'] = $user['role'];
         $_SESSION['display_name'] = $user['display_name'];
+
+        Logger::info('Login successful', ['user_id' => (int) $user['id'], 'role' => (string) $user['role']]);
 
         $this->redirect('/dashboard');
     }
@@ -105,6 +113,7 @@ final class AuthController extends Controller
             'approval_status' => 'pending',
         ]);
 
+        Logger::info('User registered', ['email' => (string) $email]);
         Session::flash('success', 'Deine Registrierung war erfolgreich. Dein Konto muss jetzt von einem Administrator freigegeben werden, bevor du dich anmelden kannst.');
         $this->redirect('/login');
     }
@@ -177,6 +186,9 @@ final class AuthController extends Controller
 
     public function logout(): void
     {
+        $userId = (int) ($_SESSION['user_id'] ?? 0);
+        Logger::info('Logout', ['user_id' => $userId]);
+
         $_SESSION = [];
         session_destroy();
         $this->redirect('/login');

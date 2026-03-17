@@ -3,3 +3,5 @@ uploads/items/*
 !uploads/items/.gitkeep
 storage/logs/*
 !storage/logs/.gitkeep
+
+!storage/logs/.htaccess
