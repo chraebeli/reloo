@@ -42,16 +42,14 @@ require __DIR__ . '/../layouts/header.php';
           <td><?= e(number_format(((int) $backup['size_bytes']) / 1024 / 1024, 2, ',', '.')) ?> MB</td>
           <td>
             <div><span class="badge text-bg-secondary"><?= e((string) $backup['backup_type']) ?></span></div>
-            <small class="text-muted">
-              DB + Uploads
-            </small>
+            <small class="text-muted">DB + Uploads</small>
           </td>
           <td>
             <?php $createdBy = $backup['created_by']; ?>
             <?= e(is_array($createdBy) ? (string) ($createdBy['email'] ?? 'unbekannt') : 'unbekannt') ?>
           </td>
           <td>
-            <div class="d-flex flex-wrap gap-1">
+            <div class="d-flex flex-wrap gap-1 mb-2">
               <a class="btn btn-sm btn-outline-primary" href="<?= e(app_base_path($config)) ?>/admin/backups/download?file=<?= urlencode((string) $backup['filename']) ?>">Download</a>
 
               <form method="post" action="<?= e(app_base_path($config)) ?>/admin/backups/delete" onsubmit="return confirm('Backup wirklich löschen?');">
@@ -59,12 +57,11 @@ require __DIR__ . '/../layouts/header.php';
                 <input type="hidden" name="file" value="<?= e((string) $backup['filename']) ?>">
                 <button class="btn btn-sm btn-outline-danger" type="submit">Löschen</button>
               </form>
-
-              <button class="btn btn-sm btn-warning" type="button" data-bs-toggle="collapse" data-bs-target="#restore-<?= md5((string) $backup['filename']) ?>">Wiederherstellen</button>
             </div>
 
-            <div class="collapse mt-2" id="restore-<?= md5((string) $backup['filename']) ?>">
-              <div class="border rounded p-2 bg-light">
+            <details>
+              <summary class="btn btn-sm btn-warning">Wiederherstellen</summary>
+              <div class="border rounded p-2 bg-light mt-2">
                 <p class="small mb-2"><strong>Bitte bestätige die Wiederherstellung ausdrücklich.</strong></p>
                 <form method="post" action="<?= e(app_base_path($config)) ?>/admin/backups/restore" onsubmit="return confirm('Restore jetzt starten? Aktuelle Daten werden überschrieben.');">
                   <?= csrf_field() ?>
@@ -88,7 +85,7 @@ require __DIR__ . '/../layouts/header.php';
                   <button class="btn btn-sm btn-danger" type="submit">Wiederherstellung starten</button>
                 </form>
               </div>
-            </div>
+            </details>
           </td>
         </tr>
       <?php endforeach; ?>
