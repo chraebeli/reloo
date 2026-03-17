@@ -42,11 +42,13 @@ Mehr Details: `docs/INSTALLATION.md`
 - Semantische Struktur mit `<main>` sowie canonical URL im Layout
 - Modernes, minimalistisches Farbschema mit harmonischen Kontrasten
 
-## E-Mail-Benachrichtigungen
-- Passwort-Reset wird per E-Mail benachrichtigt
-- Anfrage-, Freigabe- und Rückgabe-Events erzeugen E-Mail- und In-App-Benachrichtigungen
-- Versand erfolgt standardmäßig über SMTP (Fallback auf `mail()` möglich)
-- Konfiguration in `config/config.php` unter `mail` (`driver`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_pass`, `smtp_encryption`)
+## E-Mail-Benachrichtigungen & Verifizierung
+- Neue Konten müssen ihre E-Mail-Adresse per Bestätigungslink verifizieren.
+- Login ist nur möglich, wenn E-Mail verifiziert **und** (falls aktiv) Admin-Freigabe erfolgt ist.
+- Passwort-Reset sowie System-Benachrichtigungen werden per E-Mail und In-App erfasst.
+- SMTP ist shared-hosting-tauglich direkt integriert (inkl. SSL/TLS, AUTH LOGIN, UTF-8, Text+HTML).
+- Konfiguration in `config/config.php` unter `mail` mit den Feldern `host`, `port`, `encryption`, `auth`, `username`, `password`, `from_address`, `from_name`, `timeout`.
+- SMTP-Passwort nicht hardcodieren: per `RELOO_SMTP_PASSWORD` (ENV) oder in `config.php` setzen.
 
 ## Erweiterungen (V2)
 - QR-Codes pro Gegenstand

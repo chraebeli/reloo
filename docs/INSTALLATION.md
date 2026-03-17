@@ -45,10 +45,16 @@
   - im WP-Menü einen externen Link zur App setzen
 - Optional später: kleines WP-Plugin als Menü-/SSO-Bridge.
 
-## 8) E-Mail-Benachrichtigungen
-- Standardtreiber ist `mail()` (shared-hosting-freundlich).
-- `mail_from` sollte auf eine valide Domain-Adresse gesetzt werden.
-- SMTP-Konfigurationsfelder sind vorbereitet, falls der Host SMTP erzwingt.
+## 8) E-Mail-Benachrichtigungen & Verifizierung
+- Für Registrierung/Verifizierung und Benachrichtigungen ist SMTP vorkonfiguriert:
+  - Host: `mandela.sui-inter.net`
+  - Port: `465`
+  - Verschlüsselung: `ssl`
+  - Auth: `true`
+  - Username/From: `notify@reloo.ch`
+  - From-Name: `Reloo`
+- Wichtig: SMTP-Passwort in `config/config.php` oder per ENV `RELOO_SMTP_PASSWORD` setzen (nicht im Code hinterlegen).
+- Nach Registrierung wird ein 24h-Link versendet; ohne bestätigte E-Mail ist kein Login möglich.
 
 ## 9) SEO und Performance
 - Semantische HTML-Struktur + Meta-Description bereits enthalten.

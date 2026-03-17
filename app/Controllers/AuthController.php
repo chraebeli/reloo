@@ -267,12 +267,32 @@ final class AuthController extends Controller
 
         $verifyLink = $this->buildAbsolutePath('/verify-email?token=' . urlencode($token));
 
-        $message = "Hallo {$displayName},\n\n";
-        $message .= "bitte bestätige deine E-Mail-Adresse über diesen Link:\n{$verifyLink}\n\n";
-        $message .= 'Der Link ist 24 Stunden gültig. Wenn du dich nicht registriert hast, kannst du diese E-Mail ignorieren.';
+        $messageText = "Hallo {$displayName},\n\n";
+        $messageText .= "bitte bestätige deine E-Mail-Adresse, um dein Konto zu aktivieren.\n";
+        $messageText .= "Klicke dazu auf den folgenden Link:\n{$verifyLink}\n\n";
+        $messageText .= 'Der Link ist 24 Stunden gültig. Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.';
+
+        $safeLink = e($verifyLink);
+        $safeName = e($displayName);
+        $messageHtml = <<<HTML
+<!doctype html>
+<html lang="de">
+  <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+    <p>Hallo {$safeName},</p>
+    <p>bitte bestätige deine E-Mail-Adresse, um dein Konto zu aktivieren.</p>
+    <p>
+      <a href="{$safeLink}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:10px 16px;border-radius:6px;text-decoration:none;">E-Mail-Adresse bestätigen</a>
+    </p>
+    <p>Falls der Button nicht funktioniert, nutze bitte diesen Link:</p>
+    <p><a href="{$safeLink}">{$safeLink}</a></p>
+    <p>Der Link ist 24 Stunden gültig.</p>
+    <p>Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.</p>
+  </body>
+</html>
+HTML;
 
         try {
-            (new Notifier($this->db, $this->config))->notifyEmail($userId, 'Bitte bestätige deine E-Mail-Adresse', $message);
+            (new Notifier($this->db, $this->config))->notifyEmail($userId, 'Bitte bestätige deine E-Mail-Adresse', $messageText, $messageHtml);
         } catch (Throwable $exception) {
             Logger::error('Sending verification email failed', ['user_id' => $userId, 'exception' => $exception->getMessage()]);
         }
