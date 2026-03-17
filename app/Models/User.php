@@ -12,10 +12,12 @@ final class User
     {
     }
 
-    public function create(array $data): bool
+    public function create(array $data): int
     {
-        $stmt = $this->db->prepare('INSERT INTO users (name, display_name, email, password_hash, phone, location, bio, role, approval_status, created_at) VALUES (:name, :display_name, :email, :password_hash, :phone, :location, :bio, :role, :approval_status, NOW())');
-        return $stmt->execute($data);
+        $stmt = $this->db->prepare('INSERT INTO users (name, display_name, email, password_hash, phone, location, bio, role, approval_status, email_verified_at, created_at) VALUES (:name, :display_name, :email, :password_hash, :phone, :location, :bio, :role, :approval_status, :email_verified_at, NOW())');
+        $stmt->execute($data);
+
+        return (int) $this->db->lastInsertId();
     }
 
     public function findByEmail(string $email): ?array
@@ -23,6 +25,12 @@ final class User
         $stmt = $this->db->prepare('SELECT * FROM users WHERE email = :email LIMIT 1');
         $stmt->execute(['email' => $email]);
         return $stmt->fetch() ?: null;
+    }
+
+    public function markEmailVerified(int $userId): void
+    {
+        $stmt = $this->db->prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = :id');
+        $stmt->execute(['id' => $userId]);
     }
 
     public function setResetToken(int $userId, string $token, string $expiresAt): void
@@ -46,7 +54,7 @@ final class User
 
     public function all(?string $statusFilter = null): array
     {
-        $sql = 'SELECT id, name, display_name, email, role, location, approval_status, approved_at, approved_by, rejected_at, rejected_by, created_at FROM users';
+        $sql = 'SELECT id, name, display_name, email, role, location, approval_status, approved_at, approved_by, rejected_at, rejected_by, email_verified_at, created_at FROM users';
         $params = [];
 
         if (in_array($statusFilter, ['pending', 'approved', 'rejected'], true)) {

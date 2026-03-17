@@ -6,12 +6,17 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Session;
+use App\Models\EmailVerification;
 use App\Models\User;
 use App\Services\Logger;
 use App\Services\Notifier;
+use Throwable;
 
 final class AuthController extends Controller
 {
+    private const EMAIL_VERIFICATION_TTL_SECONDS = 86400;
+    private const EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
+
     public function showLogin(): void
     {
         $this->view('auth/login');
@@ -48,6 +53,13 @@ final class AuthController extends Controller
             Logger::warning('Login failed: invalid credentials', ['email' => (string) $email]);
             Session::flash('error', 'Login fehlgeschlagen. Bitte prüfe E-Mail und Passwort.');
             $this->redirect('/login');
+        }
+
+        if (empty($user['email_verified_at'])) {
+            Logger::info('Login denied: email not verified', ['user_id' => (int) $user['id']]);
+            Session::flash('error', 'Deine E-Mail-Adresse wurde noch nicht bestätigt. Bitte prüfe dein Postfach oder fordere einen neuen Bestätigungslink an.');
+            $_SESSION['verification_email_hint'] = (string) $user['email'];
+            $this->redirect('/verification/resend');
         }
 
         $approvalStatus = $user['approval_status'] ?? 'approved';
@@ -101,7 +113,7 @@ final class AuthController extends Controller
             $this->redirect('/register');
         }
 
-        $userModel->create([
+        $userId = $userModel->create([
             'name' => $name,
             'display_name' => $displayName,
             'email' => $email,
@@ -111,10 +123,63 @@ final class AuthController extends Controller
             'bio' => trim($_POST['bio'] ?? ''),
             'role' => 'member',
             'approval_status' => 'pending',
+            'email_verified_at' => null,
         ]);
 
+        $this->sendVerificationMail($userId, $email, $displayName);
+
         Logger::info('User registered', ['email' => (string) $email]);
-        Session::flash('success', 'Deine Registrierung war erfolgreich. Dein Konto muss jetzt von einem Administrator freigegeben werden, bevor du dich anmelden kannst.');
+        Session::flash('success', 'Deine Registrierung war erfolgreich. Wir haben dir eine E-Mail mit einem Bestätigungslink gesendet. Bitte prüfe dein Postfach. Anschließend muss dein Konto ggf. noch von einem Administrator freigegeben werden.');
+        $this->redirect('/login');
+    }
+
+    public function showResendVerification(): void
+    {
+        $this->view('auth/resend-verification', [
+            'prefillEmail' => $_SESSION['verification_email_hint'] ?? '',
+        ]);
+        unset($_SESSION['verification_email_hint']);
+    }
+
+    public function resendVerification(): void
+    {
+        verify_csrf();
+
+        $email = filter_var(trim($_POST['email'] ?? ''), FILTER_VALIDATE_EMAIL);
+        if ($email) {
+            $user = (new User($this->db))->findByEmail($email);
+            if ($user && empty($user['email_verified_at'])) {
+                $verificationModel = new EmailVerification($this->db);
+                if (!$verificationModel->hasRecentOpenToken((int) $user['id'], self::EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS)) {
+                    $this->sendVerificationMail((int) $user['id'], (string) $user['email'], (string) $user['display_name']);
+                }
+            }
+        }
+
+        Session::flash('success', 'Falls ein unverifiziertes Konto für diese E-Mail-Adresse existiert, wurde ein neuer Bestätigungslink versendet.');
+        $this->redirect('/login');
+    }
+
+    public function verifyEmail(): void
+    {
+        $token = trim($_GET['token'] ?? '');
+        if ($token === '') {
+            Session::flash('error', 'Dieser Bestätigungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+            $this->redirect('/verification/resend');
+        }
+
+        $tokenHash = hash('sha256', $token);
+        $verificationModel = new EmailVerification($this->db);
+        $verification = $verificationModel->consumeValidToken($tokenHash);
+
+        if (!$verification) {
+            Session::flash('error', 'Dieser Bestätigungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+            $this->redirect('/verification/resend');
+        }
+
+        (new User($this->db))->markEmailVerified((int) $verification['user_id']);
+
+        Session::flash('success', 'Deine E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
         $this->redirect('/login');
     }
 
@@ -137,9 +202,7 @@ final class AuthController extends Controller
             $token = bin2hex(random_bytes(24));
             $userModel->setResetToken((int) $user['id'], hash('sha256', $token), date('Y-m-d H:i:s', time() + 3600));
 
-            $scheme = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            $resetLink = $scheme . '://' . $host . app_base_path($this->config) . '/password/reset?token=' . urlencode($token);
+            $resetLink = $this->buildAbsolutePath('/password/reset?token=' . urlencode($token));
             (new Notifier($this->db, $this->config))->notifyEmail(
                 (int) $user['id'],
                 'Passwort zurücksetzen',
@@ -192,5 +255,34 @@ final class AuthController extends Controller
         $_SESSION = [];
         session_destroy();
         $this->redirect('/login');
+    }
+
+    private function sendVerificationMail(int $userId, string $email, string $displayName): void
+    {
+        $token = bin2hex(random_bytes(32));
+        $tokenHash = hash('sha256', $token);
+        $expiresAt = date('Y-m-d H:i:s', time() + self::EMAIL_VERIFICATION_TTL_SECONDS);
+
+        (new EmailVerification($this->db))->issueToken($userId, $email, $tokenHash, $expiresAt);
+
+        $verifyLink = $this->buildAbsolutePath('/verify-email?token=' . urlencode($token));
+
+        $message = "Hallo {$displayName},\n\n";
+        $message .= "bitte bestätige deine E-Mail-Adresse über diesen Link:\n{$verifyLink}\n\n";
+        $message .= 'Der Link ist 24 Stunden gültig. Wenn du dich nicht registriert hast, kannst du diese E-Mail ignorieren.';
+
+        try {
+            (new Notifier($this->db, $this->config))->notifyEmail($userId, 'Bitte bestätige deine E-Mail-Adresse', $message);
+        } catch (Throwable $exception) {
+            Logger::error('Sending verification email failed', ['user_id' => $userId, 'exception' => $exception->getMessage()]);
+        }
+    }
+
+    private function buildAbsolutePath(string $path): string
+    {
+        $scheme = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+        return $scheme . '://' . $host . app_base_path($this->config) . $path;
     }
 }
