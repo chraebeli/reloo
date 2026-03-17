@@ -20,9 +20,25 @@ CREATE TABLE users (
   updated_at DATETIME NULL,
   INDEX idx_users_role_created (role, created_at),
   INDEX idx_users_approval_status_created (approval_status, created_at),
+  INDEX idx_users_email_verified (email_verified_at),
   INDEX idx_users_reset_expires (password_reset_expires_at),
   CONSTRAINT fk_users_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
   CONSTRAINT fk_users_rejected_by FOREIGN KEY (rejected_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+CREATE TABLE email_verifications (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT UNSIGNED NOT NULL,
+  email VARCHAR(190) NOT NULL,
+  token_hash VARCHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL,
+  INDEX idx_email_verifications_user_created (user_id, created_at),
+  INDEX idx_email_verifications_expires (expires_at),
+  UNIQUE KEY uq_email_verifications_token_hash (token_hash),
+  CONSTRAINT fk_email_verifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE `groups` (

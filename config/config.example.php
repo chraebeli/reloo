@@ -18,11 +18,14 @@ return [
         'charset' => 'utf8mb4',
     ],
     'mail' => [
-        'driver' => 'mail',
-        'smtp_host' => '',
+        'driver' => 'smtp', // smtp oder mail
+        'smtp_host' => 'smtp.deine-domain.de',
         'smtp_port' => 587,
-        'smtp_user' => '',
-        'smtp_pass' => '',
+        'smtp_user' => 'noreply@deine-domain.de',
+        'smtp_pass' => 'dein_smtp_passwort',
+        'smtp_encryption' => 'tls', // tls, ssl oder none
+        'smtp_timeout' => 15,
         'smtp_from_name' => 'Reloo',
+        'smtp_from_email' => 'noreply@deine-domain.de',
     ],
 ];

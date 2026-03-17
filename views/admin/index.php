@@ -41,7 +41,8 @@ $statusBadgeClasses = [
               <th>E-Mail</th>
               <th>Rolle</th>
               <th>Registriert am</th>
-              <th>Status</th>
+              <th>Freigabe</th>
+              <th>E-Mail</th>
               <th>Aktionen</th>
             </tr>
           </thead>
@@ -55,6 +56,13 @@ $statusBadgeClasses = [
                 <td>
                   <?php $status = $user['approval_status'] ?? 'approved'; ?>
                   <span class="badge <?= e($statusBadgeClasses[$status] ?? 'bg-secondary') ?>"><?= e($statusLabels[$status] ?? $status) ?></span>
+                </td>
+                <td>
+                  <?php if (!empty($user['email_verified_at'])): ?>
+                    <span class="badge bg-success">Verifiziert</span>
+                  <?php else: ?>
+                    <span class="badge bg-secondary">Nicht verifiziert</span>
+                  <?php endif; ?>
                 </td>
                 <td>
                   <div class="d-flex flex-wrap gap-1">
