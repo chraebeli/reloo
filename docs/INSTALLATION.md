@@ -54,6 +54,7 @@
   - Username/From: `notify@reloo.ch`
   - From-Name: `Reloo`
 - Wichtig: SMTP-Passwort in `config/config.php` oder per ENV `RELOO_SMTP_PASSWORD` setzen (nicht im Code hinterlegen).
+- Zusätzlich `sender` und `reply_to` explizit auf `notify@reloo.ch` belassen; es gibt keinen Fallback auf `mail()` oder `sendmail`.
 - Nach Registrierung wird ein 24h-Link versendet; ohne bestätigte E-Mail ist kein Login möglich.
 
 ## 9) SEO und Performance

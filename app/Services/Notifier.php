@@ -15,31 +15,45 @@ final class Notifier
     {
     }
 
-    public function notifyEmail(int $userId, string $subject, string $messageText, ?string $messageHtml = null): void
+    public function notifyEmail(int $userId, string $subject, string $messageText, ?string $messageHtml = null): bool
     {
         $stmt = $this->db->prepare('SELECT email FROM users WHERE id = :id LIMIT 1');
         $stmt->execute(['id' => $userId]);
         $email = $stmt->fetchColumn();
 
         if (!is_string($email) || $email === '') {
-            return;
+            Logger::warning('Email delivery skipped because recipient address is missing', [
+                'user_id' => $userId,
+                'subject' => mb_substr($subject, 0, 120),
+            ]);
+
+            $this->createInAppNotification($userId, $subject, $messageText, 'email', null);
+            return false;
         }
 
-        $driver = strtolower((string) (($this->config['mail']['driver'] ?? 'smtp')));
-        $success = $driver === 'mail'
-            ? $this->sendViaMail($email, $subject, $messageText, $messageHtml)
-            : $this->sendViaSmtp($email, $subject, $messageText, $messageHtml);
+        try {
+            $success = $this->sendViaSmtp($email, $subject, $messageText, $messageHtml);
+        } catch (RuntimeException $exception) {
+            Logger::error('SMTP delivery aborted due to invalid configuration', [
+                'user_id' => $userId,
+                'error' => $exception->getMessage(),
+                'subject' => mb_substr($subject, 0, 120),
+            ]);
+            $success = false;
+        }
 
         if (!$success) {
             Logger::warning('Email could not be delivered', [
                 'user_id' => $userId,
-                'driver' => $driver,
+                'driver' => 'smtp',
                 'recipient_domain' => $this->extractDomain($email),
                 'subject' => mb_substr($subject, 0, 120),
             ]);
         }
 
         $this->createInAppNotification($userId, $subject, $messageText, 'email', $success ? date('Y-m-d H:i:s') : null);
+
+        return $success;
     }
 
     public function createInAppNotification(int $userId, string $subject, string $message, string $channel = 'in_app', ?string $sentAt = null): void
@@ -54,37 +68,35 @@ final class Notifier
         ]);
     }
 
-    private function sendViaMail(string $to, string $subject, string $messageText, ?string $messageHtml = null): bool
-    {
-        [$headers, $body] = $this->buildMimePayload($to, $subject, $messageText, $messageHtml);
-        return mail($to, $subject, $body, implode("\r\n", $headers));
-    }
-
     private function sendViaSmtp(string $to, string $subject, string $messageText, ?string $messageHtml = null): bool
     {
-        $mailConfig = $this->config['mail'] ?? [];
-        $host = trim((string) ($mailConfig['host'] ?? $mailConfig['smtp_host'] ?? ''));
-        if ($host === '') {
-            Logger::warning('SMTP host missing; falling back to PHP mail()');
-            return $this->sendViaMail($to, $subject, $messageText, $messageHtml);
-        }
-
-        $port = (int) ($mailConfig['port'] ?? $mailConfig['smtp_port'] ?? 587);
-        $user = (string) ($mailConfig['username'] ?? $mailConfig['smtp_user'] ?? '');
-        $password = (string) ($mailConfig['password'] ?? $mailConfig['smtp_pass'] ?? '');
-        $encryption = strtolower((string) ($mailConfig['encryption'] ?? $mailConfig['smtp_encryption'] ?? 'tls'));
-        $timeout = (int) ($mailConfig['timeout'] ?? $mailConfig['smtp_timeout'] ?? 15);
-        $authEnabled = (bool) ($mailConfig['auth'] ?? true);
-        if ($authEnabled && ($user === '' || $password === '')) {
-            Logger::error('SMTP auth enabled but credentials are incomplete', ['host' => $host, 'port' => $port]);
-            return false;
-        }
-
-        $from = $this->mailFrom();
+        $mailConfig = $this->mailConfig();
+        $host = $mailConfig['host'];
+        $port = $mailConfig['port'];
+        $user = $mailConfig['username'];
+        $password = $mailConfig['password'];
+        $encryption = $mailConfig['encryption'];
+        $timeout = $mailConfig['timeout'];
+        $from = $mailConfig['from_address'];
+        $fromName = $mailConfig['from_name'];
+        $replyTo = $mailConfig['reply_to'];
+        $sender = $mailConfig['sender'];
         $ehloHost = $this->ehloHost($host);
 
-        $transport = $encryption === 'ssl' ? 'ssl://' . $host : $host;
+        Logger::info('Preparing authenticated SMTP delivery', [
+            'transport' => 'smtp',
+            'host' => $host,
+            'port' => $port,
+            'encryption' => $encryption,
+            'timeout' => $timeout,
+            'auth' => true,
+            'from_address' => $from,
+            'sender' => $sender,
+            'reply_to' => $replyTo,
+            'recipient_domain' => $this->extractDomain($to),
+        ]);
 
+        $transport = $encryption === 'ssl' ? 'ssl://' . $host : $host;
         $context = stream_context_create([
             'ssl' => [
                 'verify_peer' => true,
@@ -96,7 +108,13 @@ final class Notifier
 
         $socket = @stream_socket_client($transport . ':' . $port, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
         if (!is_resource($socket)) {
-            Logger::error('SMTP connection failed', ['error' => $errstr, 'code' => $errno, 'host' => $host, 'port' => $port]);
+            Logger::error('SMTP connection failed', [
+                'error' => $errstr,
+                'code' => $errno,
+                'host' => $host,
+                'port' => $port,
+                'encryption' => $encryption,
+            ]);
             return false;
         }
 
@@ -114,15 +132,20 @@ final class Notifier
                 $capabilities = $this->smtpEhlo($socket, $ehloHost);
             }
 
-            if ($authEnabled) {
-                $this->smtpAuthenticate($socket, $capabilities, $user, $password);
-            }
+            $this->smtpAuthenticate($socket, $capabilities, $user, $password);
 
-            $this->smtpCommand($socket, 'MAIL FROM:<' . $from . '>', [250]);
+            Logger::info('SMTP authentication succeeded', [
+                'host' => $host,
+                'port' => $port,
+                'encryption' => $encryption,
+                'username' => $user,
+            ]);
+
+            $this->smtpCommand($socket, 'MAIL FROM:<' . $sender . '>', [250]);
             $this->smtpCommand($socket, 'RCPT TO:<' . $to . '>', [250, 251]);
             $this->smtpCommand($socket, 'DATA', [354]);
 
-            [$headers, $payloadBody] = $this->buildMimePayload($to, $subject, $messageText, $messageHtml);
+            [$headers, $payloadBody] = $this->buildMimePayload($to, $subject, $messageText, $messageHtml, $from, $fromName, $replyTo, $sender);
             $body = $this->normalizeSmtpBody($payloadBody);
             $payload = implode("\r\n", $headers) . "\r\n\r\n" . $body . "\r\n.";
 
@@ -131,13 +154,24 @@ final class Notifier
             $this->smtpCommand($socket, 'QUIT', [221]);
 
             fclose($socket);
+
+            Logger::info('SMTP message accepted by remote server', [
+                'host' => $host,
+                'port' => $port,
+                'encryption' => $encryption,
+                'recipient_domain' => $this->extractDomain($to),
+                'subject' => mb_substr($subject, 0, 120),
+            ]);
+
             return true;
         } catch (RuntimeException $exception) {
             Logger::error('SMTP send failed', [
                 'error' => $exception->getMessage(),
                 'host' => $host,
                 'port' => $port,
+                'encryption' => $encryption,
                 'recipient_domain' => $this->extractDomain($to),
+                'subject' => mb_substr($subject, 0, 120),
             ]);
 
             fclose($socket);
@@ -146,39 +180,97 @@ final class Notifier
     }
 
     /**
+     * @return array{host: string, port: int, username: string, password: string, encryption: string, timeout: int, from_address: string, from_name: string, sender: string, reply_to: string}
+     */
+    private function mailConfig(): array
+    {
+        $mailConfig = $this->config['mail'] ?? [];
+        $host = trim((string) ($mailConfig['host'] ?? ''));
+        $port = (int) ($mailConfig['port'] ?? 465);
+        $username = trim((string) ($mailConfig['username'] ?? ''));
+        $password = (string) ($mailConfig['password'] ?? '');
+        $encryption = strtolower(trim((string) ($mailConfig['encryption'] ?? 'ssl')));
+        $timeout = max(1, (int) ($mailConfig['timeout'] ?? 15));
+        $fromAddress = trim((string) ($mailConfig['from_address'] ?? $this->config['app']['mail_from'] ?? ''));
+        $fromName = trim((string) ($mailConfig['from_name'] ?? $this->config['app']['name'] ?? 'Reloo'));
+        $sender = trim((string) ($mailConfig['sender'] ?? $fromAddress));
+        $replyTo = trim((string) ($mailConfig['reply_to'] ?? $fromAddress));
+        $driver = strtolower(trim((string) ($mailConfig['driver'] ?? 'smtp')));
+        $auth = (bool) ($mailConfig['auth'] ?? true);
+
+        if ($driver !== 'smtp') {
+            throw new RuntimeException('Nur authentifizierter SMTP-Versand ist erlaubt.');
+        }
+
+        if ($auth !== true) {
+            throw new RuntimeException('SMTP-Authentifizierung muss aktiviert sein.');
+        }
+
+        if ($host === '' || $username === '' || $password === '' || $fromAddress === '' || $sender === '' || $replyTo === '') {
+            throw new RuntimeException('SMTP-Konfiguration ist unvollständig.');
+        }
+
+        if (strtolower($host) !== 'mandela.sui-inter.net') {
+            throw new RuntimeException('SMTP-Host muss mandela.sui-inter.net sein.');
+        }
+
+        if ($port !== 465) {
+            throw new RuntimeException('SMTP-Port muss auf 465 gesetzt sein.');
+        }
+
+        if ($encryption !== 'ssl') {
+            throw new RuntimeException('SMTP-Verschlüsselung muss ssl/SMTPS sein.');
+        }
+
+        $normalizedUsername = strtolower($username);
+        $normalizedFrom = strtolower($fromAddress);
+        $normalizedSender = strtolower($sender);
+        $normalizedReplyTo = strtolower($replyTo);
+        if ($normalizedUsername !== 'notify@reloo.ch' || $normalizedFrom !== 'notify@reloo.ch' || $normalizedSender !== 'notify@reloo.ch' || $normalizedReplyTo !== 'notify@reloo.ch') {
+            throw new RuntimeException('Absender, Sender, Reply-To und SMTP-Benutzer müssen einheitlich notify@reloo.ch sein.');
+        }
+
+        return [
+            'host' => $host,
+            'port' => $port,
+            'username' => $username,
+            'password' => $password,
+            'encryption' => $encryption,
+            'timeout' => $timeout,
+            'from_address' => $fromAddress,
+            'from_name' => $fromName,
+            'sender' => $sender,
+            'reply_to' => $replyTo,
+        ];
+    }
+
+    /**
      * @return array<int, string>
      */
-    private function buildCommonHeaders(): array
+    private function buildCommonHeaders(string $from, string $fromName, string $replyTo, string $sender): array
     {
-        $from = $this->mailFrom();
-        $fromName = (string) ($this->config['mail']['from_name'] ?? $this->config['mail']['smtp_from_name'] ?? $this->config['app']['name'] ?? 'Reloo');
         $encodedFromName = mb_encode_mimeheader($fromName, 'UTF-8');
 
         return [
             'MIME-Version: 1.0',
             'From: ' . $encodedFromName . ' <' . $from . '>',
-            'Sender: ' . $from,
-            'Reply-To: ' . $from,
-            'X-Mailer: PHP/' . PHP_VERSION,
+            'Sender: ' . $sender,
+            'Reply-To: ' . $replyTo,
+            'X-Mailer: Reloo SMTP Mailer',
         ];
-    }
-
-    private function mailFrom(): string
-    {
-        return (string) ($this->config['mail']['from_address'] ?? $this->config['mail']['smtp_from_email'] ?? $this->config['app']['mail_from'] ?? 'noreply@example.org');
     }
 
     /**
      * @return array{0: array<int, string>, 1: string}
      */
-    private function buildMimePayload(string $to, string $subject, string $messageText, ?string $messageHtml = null): array
+    private function buildMimePayload(string $to, string $subject, string $messageText, ?string $messageHtml, string $from, string $fromName, string $replyTo, string $sender): array
     {
         $headers = [
             'Date: ' . date(DATE_RFC2822),
             'To: ' . $to,
             'Subject: ' . mb_encode_mimeheader($subject, 'UTF-8'),
             'Message-ID: ' . $this->messageId(),
-            ...$this->buildCommonHeaders(),
+            ...$this->buildCommonHeaders($from, $fromName, $replyTo, $sender),
         ];
 
         if ($messageHtml === null || trim($messageHtml) === '') {
@@ -322,8 +414,7 @@ final class Notifier
             return $configured;
         }
 
-        $from = $this->mailFrom();
-        $parts = explode('@', $from);
+        $parts = explode('@', 'notify@reloo.ch');
         if (count($parts) === 2 && $parts[1] !== '') {
             return $parts[1];
         }

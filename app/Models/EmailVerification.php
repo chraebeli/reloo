@@ -57,7 +57,7 @@ final class EmailVerification
         return (int) $stmt->fetchColumn() > 0;
     }
 
-    private function invalidateOpenTokens(int $userId): void
+    public function invalidateOpenTokens(int $userId): void
     {
         $stmt = $this->db->prepare('UPDATE email_verifications SET used_at = NOW() WHERE user_id = :user_id AND used_at IS NULL');
         $stmt->execute(['user_id' => $userId]);

@@ -18,7 +18,7 @@ return [
         'charset' => 'utf8mb4',
     ],
     'mail' => [
-        'driver' => 'smtp', // smtp oder mail
+        'driver' => 'smtp', // ausschließlich authentifizierter SMTP-Versand
         'host' => 'mandela.sui-inter.net',
         'port' => 465,
         'encryption' => 'ssl', // ssl, tls oder none
@@ -27,6 +27,8 @@ return [
         'password' => getenv('RELOO_SMTP_PASSWORD') ?: '', // Passwort hier oder per ENV setzen
         'from_address' => 'notify@reloo.ch',
         'from_name' => 'Reloo',
+        'sender' => 'notify@reloo.ch',
+        'reply_to' => 'notify@reloo.ch',
         'ehlo_domain' => 'reloo.ch',
         'timeout' => 15,
     ],

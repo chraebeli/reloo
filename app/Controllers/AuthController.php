@@ -126,10 +126,14 @@ final class AuthController extends Controller
             'email_verified_at' => null,
         ]);
 
-        $this->sendVerificationMail($userId, $email, $displayName);
+        $mailSent = $this->sendVerificationMail($userId, $email, $displayName);
 
-        Logger::info('User registered', ['email' => (string) $email]);
-        Session::flash('success', 'Deine Registrierung war erfolgreich. Wir haben dir eine E-Mail mit einem Bestätigungslink gesendet. Bitte prüfe dein Postfach. Anschließend muss dein Konto ggf. noch von einem Administrator freigegeben werden.');
+        Logger::info('User registered', ['email' => (string) $email, 'verification_mail_sent' => $mailSent]);
+        if ($mailSent) {
+            Session::flash('success', 'Deine Registrierung war erfolgreich. Wir haben dir eine E-Mail mit einem Bestätigungslink gesendet. Bitte prüfe dein Postfach. Anschließend muss dein Konto ggf. noch von einem Administrator freigegeben werden.');
+        } else {
+            Session::flash('error', 'Dein Konto wurde erstellt, aber die Verifikations-E-Mail konnte derzeit nicht versendet werden. Bitte versuche es erneut oder kontaktiere den Support.');
+        }
         $this->redirect('/login');
     }
 
@@ -151,7 +155,11 @@ final class AuthController extends Controller
             if ($user && empty($user['email_verified_at'])) {
                 $verificationModel = new EmailVerification($this->db);
                 if (!$verificationModel->hasRecentOpenToken((int) $user['id'], self::EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS)) {
-                    $this->sendVerificationMail((int) $user['id'], (string) $user['email'], (string) $user['display_name']);
+                    $sent = $this->sendVerificationMail((int) $user['id'], (string) $user['email'], (string) $user['display_name']);
+                    if (!$sent) {
+                        Session::flash('error', 'Der Bestätigungslink konnte aktuell nicht versendet werden. Bitte versuche es später erneut.');
+                        $this->redirect('/verification/resend');
+                    }
                 }
             }
         }
@@ -257,7 +265,7 @@ final class AuthController extends Controller
         $this->redirect('/login');
     }
 
-    private function sendVerificationMail(int $userId, string $email, string $displayName): void
+    private function sendVerificationMail(int $userId, string $email, string $displayName): bool
     {
         $token = bin2hex(random_bytes(32));
         $tokenHash = hash('sha256', $token);
@@ -291,10 +299,21 @@ final class AuthController extends Controller
 </html>
 HTML;
 
+        $verificationModel = new EmailVerification($this->db);
+
         try {
-            (new Notifier($this->db, $this->config))->notifyEmail($userId, 'Bitte bestätige deine E-Mail-Adresse', $messageText, $messageHtml);
+            $sent = (new Notifier($this->db, $this->config))->notifyEmail($userId, 'Bitte bestätige deine E-Mail-Adresse', $messageText, $messageHtml);
+            if (!$sent) {
+                $verificationModel->invalidateOpenTokens($userId);
+                Logger::error('Sending verification email failed', ['user_id' => $userId, 'email' => $email, 'reason' => 'smtp_delivery_failed']);
+            }
+
+            return $sent;
         } catch (Throwable $exception) {
-            Logger::error('Sending verification email failed', ['user_id' => $userId, 'exception' => $exception->getMessage()]);
+            $verificationModel->invalidateOpenTokens($userId);
+            Logger::error('Sending verification email failed', ['user_id' => $userId, 'email' => $email, 'exception' => $exception->getMessage()]);
+
+            return false;
         }
     }
 
