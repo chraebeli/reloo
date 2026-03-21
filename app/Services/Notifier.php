@@ -9,6 +9,8 @@ use RuntimeException;
 
 final class Notifier
 {
+    private const DEFAULT_EHLO_HOST = 'localhost';
+
     public function __construct(private PDO $db, private array $config)
     {
     }
@@ -79,10 +81,20 @@ final class Notifier
         }
 
         $from = $this->mailFrom();
+        $ehloHost = $this->ehloHost($host);
 
         $transport = $encryption === 'ssl' ? 'ssl://' . $host : $host;
 
-        $socket = @stream_socket_client($transport . ':' . $port, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+                'peer_name' => $host,
+                'SNI_enabled' => true,
+            ],
+        ]);
+
+        $socket = @stream_socket_client($transport . ':' . $port, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
         if (!is_resource($socket)) {
             Logger::error('SMTP connection failed', ['error' => $errstr, 'code' => $errno, 'host' => $host, 'port' => $port]);
             return false;
@@ -92,20 +104,18 @@ final class Notifier
 
         try {
             $this->smtpExpect($socket, [220]);
-            $this->smtpCommand($socket, 'EHLO localhost', [250]);
+            $capabilities = $this->smtpEhlo($socket, $ehloHost);
 
             if ($encryption === 'tls') {
                 $this->smtpCommand($socket, 'STARTTLS', [220]);
                 if (!stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) {
                     throw new RuntimeException('STARTTLS konnte nicht aktiviert werden.');
                 }
-                $this->smtpCommand($socket, 'EHLO localhost', [250]);
+                $capabilities = $this->smtpEhlo($socket, $ehloHost);
             }
 
-            if ($authEnabled && $user !== '' && $password !== '') {
-                $this->smtpCommand($socket, 'AUTH LOGIN', [334]);
-                $this->smtpCommand($socket, base64_encode($user), [334]);
-                $this->smtpCommand($socket, base64_encode($password), [235]);
+            if ($authEnabled) {
+                $this->smtpAuthenticate($socket, $capabilities, $user, $password);
             }
 
             $this->smtpCommand($socket, 'MAIL FROM:<' . $from . '>', [250]);
@@ -147,6 +157,7 @@ final class Notifier
         return [
             'MIME-Version: 1.0',
             'From: ' . $encodedFromName . ' <' . $from . '>',
+            'Sender: ' . $from,
             'Reply-To: ' . $from,
             'X-Mailer: PHP/' . PHP_VERSION,
         ];
@@ -166,6 +177,7 @@ final class Notifier
             'Date: ' . date(DATE_RFC2822),
             'To: ' . $to,
             'Subject: ' . mb_encode_mimeheader($subject, 'UTF-8'),
+            'Message-ID: ' . $this->messageId(),
             ...$this->buildCommonHeaders(),
         ];
 
@@ -198,6 +210,55 @@ final class Notifier
         return [$headers, implode("\r\n", $bodyParts)];
     }
 
+    /**
+     * @return array<int, string>
+     */
+    private function smtpEhlo($socket, string $ehloHost): array
+    {
+        fwrite($socket, 'EHLO ' . $ehloHost . "\r\n");
+        $response = $this->smtpReadResponse($socket);
+        $code = (int) substr($response, 0, 3);
+        if ($code !== 250) {
+            throw new RuntimeException('Unerwartete SMTP-Antwort: ' . trim($response));
+        }
+
+        return $this->parseEhloCapabilities($response);
+    }
+
+    /**
+     * @param array<int, string> $capabilities
+     */
+    private function smtpAuthenticate($socket, array $capabilities, string $user, string $password): void
+    {
+        $authLine = null;
+        foreach ($capabilities as $capability) {
+            if (str_starts_with(strtoupper($capability), 'AUTH ')) {
+                $authLine = strtoupper(substr($capability, 5));
+                break;
+            }
+        }
+
+        if ($authLine === null) {
+            throw new RuntimeException('SMTP-Server bietet keine AUTH-Erweiterung an.');
+        }
+
+        $methods = preg_split('/\s+/', trim($authLine)) ?: [];
+        if (in_array('PLAIN', $methods, true)) {
+            $payload = base64_encode("\0" . $user . "\0" . $password);
+            $this->smtpCommand($socket, 'AUTH PLAIN ' . $payload, [235]);
+            return;
+        }
+
+        if (in_array('LOGIN', $methods, true)) {
+            $this->smtpCommand($socket, 'AUTH LOGIN', [334]);
+            $this->smtpCommand($socket, base64_encode($user), [334]);
+            $this->smtpCommand($socket, base64_encode($password), [235]);
+            return;
+        }
+
+        throw new RuntimeException('Kein unterstütztes SMTP-AUTH-Verfahren verfügbar: ' . implode(', ', $methods));
+    }
+
     private function smtpCommand($socket, string $command, array $expectedCodes): void
     {
         fwrite($socket, $command . "\r\n");
@@ -205,6 +266,19 @@ final class Notifier
     }
 
     private function smtpExpect($socket, array $expectedCodes): void
+    {
+        $response = $this->smtpReadResponse($socket);
+        if ($response === '') {
+            throw new RuntimeException('Leere SMTP-Antwort erhalten.');
+        }
+
+        $code = (int) substr($response, 0, 3);
+        if (!in_array($code, $expectedCodes, true)) {
+            throw new RuntimeException('Unerwartete SMTP-Antwort: ' . trim($response));
+        }
+    }
+
+    private function smtpReadResponse($socket): string
     {
         $response = '';
 
@@ -215,14 +289,52 @@ final class Notifier
             }
         }
 
-        if ($response === '') {
-            throw new RuntimeException('Leere SMTP-Antwort erhalten.');
+        return $response;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function parseEhloCapabilities(string $response): array
+    {
+        $lines = preg_split("/\r\n|\n|\r/", trim($response)) ?: [];
+        $capabilities = [];
+
+        foreach ($lines as $index => $line) {
+            if ($index === 0) {
+                continue;
+            }
+
+            if (strlen($line) <= 4) {
+                continue;
+            }
+
+            $capabilities[] = trim(substr($line, 4));
         }
 
-        $code = (int) substr($response, 0, 3);
-        if (!in_array($code, $expectedCodes, true)) {
-            throw new RuntimeException('Unerwartete SMTP-Antwort: ' . trim($response));
+        return $capabilities;
+    }
+
+    private function ehloHost(string $host): string
+    {
+        $configured = trim((string) ($this->config['mail']['ehlo_domain'] ?? ''));
+        if ($configured !== '') {
+            return $configured;
         }
+
+        $from = $this->mailFrom();
+        $parts = explode('@', $from);
+        if (count($parts) === 2 && $parts[1] !== '') {
+            return $parts[1];
+        }
+
+        return $host !== '' ? $host : self::DEFAULT_EHLO_HOST;
+    }
+
+    private function messageId(): string
+    {
+        $domain = $this->ehloHost(self::DEFAULT_EHLO_HOST);
+        return '<' . bin2hex(random_bytes(16)) . '@' . $domain . '>';
     }
 
     private function normalizeSmtpBody(string $message): string

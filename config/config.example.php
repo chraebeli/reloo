@@ -27,6 +27,7 @@ return [
         'password' => getenv('RELOO_SMTP_PASSWORD') ?: '', // Passwort hier oder per ENV setzen
         'from_address' => 'notify@reloo.ch',
         'from_name' => 'Reloo',
+        'ehlo_domain' => 'reloo.ch',
         'timeout' => 15,
     ],
 ];
