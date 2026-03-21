@@ -46,9 +46,10 @@ Mehr Details: `docs/INSTALLATION.md`
 - Neue Konten müssen ihre E-Mail-Adresse per Bestätigungslink verifizieren.
 - Login ist nur möglich, wenn E-Mail verifiziert **und** (falls aktiv) Admin-Freigabe erfolgt ist.
 - Passwort-Reset sowie System-Benachrichtigungen werden per E-Mail und In-App erfasst.
-- SMTP ist shared-hosting-tauglich direkt integriert (inkl. SSL/TLS, AUTH LOGIN, UTF-8, Text+HTML).
-- Konfiguration in `config/config.php` unter `mail` mit den Feldern `host`, `port`, `encryption`, `auth`, `username`, `password`, `from_address`, `from_name`, `timeout`.
+- SMTP ist shared-hosting-tauglich direkt integriert (inkl. SMTPS/SSL auf Port 465, AUTH, UTF-8, Text+HTML).
+- Konfiguration in `config/config.php` unter `mail` mit den Feldern `host`, `port`, `encryption`, `auth`, `username`, `password`, `from_address`, `from_name`, `sender`, `reply_to`, `timeout`.
 - SMTP-Passwort nicht hardcodieren: per `RELOO_SMTP_PASSWORD` (ENV) oder in `config.php` setzen.
+- Es gibt keinen Fallback auf `mail()`, `sendmail` oder lokale Mailer; fehlgeschlagene SMTP-Zustellung wird geloggt und als Fehler behandelt.
 
 ## Erweiterungen (V2)
 - QR-Codes pro Gegenstand
