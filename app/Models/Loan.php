@@ -20,7 +20,7 @@ final class Loan
 
     public function canRequestItem(int $itemId, int $requesterId): bool
     {
-        $stmt = $this->db->prepare('SELECT 1 FROM items i JOIN group_members gm ON gm.group_id = i.group_id WHERE i.id = :item_id AND gm.user_id = :requester_id AND i.owner_id <> :owner_check_id LIMIT 1');
+        $stmt = $this->db->prepare('SELECT 1 FROM items i JOIN group_members gm ON gm.group_id = i.group_id WHERE i.id = :item_id AND i.deleted_at IS NULL AND gm.user_id = :requester_id AND i.owner_id <> :owner_check_id LIMIT 1');
         $stmt->execute([
             'item_id' => $itemId,
             'requester_id' => $requesterId,
@@ -32,7 +32,7 @@ final class Loan
 
     public function pendingForOwner(int $ownerId): array
     {
-        $stmt = $this->db->prepare('SELECT ir.*, i.title, u.display_name AS requester_name FROM item_requests ir JOIN items i ON i.id = ir.item_id JOIN users u ON u.id = ir.requester_id WHERE i.owner_id = :owner_id AND ir.status = :status ORDER BY ir.created_at DESC');
+        $stmt = $this->db->prepare('SELECT ir.*, i.title, u.display_name AS requester_name FROM item_requests ir JOIN items i ON i.id = ir.item_id JOIN users u ON u.id = ir.requester_id WHERE i.owner_id = :owner_id AND i.deleted_at IS NULL AND ir.status = :status ORDER BY ir.created_at DESC');
         $stmt->execute(['owner_id' => $ownerId, 'status' => 'angefragt']);
         return $stmt->fetchAll();
     }
@@ -40,11 +40,11 @@ final class Loan
     public function approveRequest(int $requestId, int $ownerId): bool
     {
         $this->db->beginTransaction();
-        $reqStmt = $this->db->prepare('SELECT ir.*, i.owner_id FROM item_requests ir JOIN items i ON i.id = ir.item_id WHERE ir.id = :id LIMIT 1 FOR UPDATE');
+        $reqStmt = $this->db->prepare('SELECT ir.*, i.owner_id, i.deleted_at FROM item_requests ir JOIN items i ON i.id = ir.item_id WHERE ir.id = :id LIMIT 1 FOR UPDATE');
         $reqStmt->execute(['id' => $requestId]);
         $req = $reqStmt->fetch();
 
-        if (!$req || (int) $req['owner_id'] !== $ownerId || $req['status'] !== 'angefragt') {
+        if (!$req || !empty($req['deleted_at']) || (int) $req['owner_id'] !== $ownerId || $req['status'] !== 'angefragt') {
             $this->db->rollBack();
             return false;
         }
@@ -87,7 +87,7 @@ final class Loan
         $this->db->beginTransaction();
         $upd = $this->db->prepare('UPDATE loans SET status = :status, returned_at = NOW() WHERE id = :id');
         $upd->execute(['status' => 'zurückgegeben', 'id' => $loanId]);
-        $item = $this->db->prepare('UPDATE items SET availability_status = :status WHERE id = :item_id');
+        $item = $this->db->prepare('UPDATE items SET availability_status = :status WHERE id = :item_id AND deleted_at IS NULL');
         $item->execute(['status' => 'verfügbar', 'item_id' => $loan['item_id']]);
         $this->db->commit();
 
@@ -106,7 +106,7 @@ final class Loan
 
     public function requestNotificationData(int $itemId): ?array
     {
-        $stmt = $this->db->prepare('SELECT i.title, i.owner_id, u.display_name AS owner_name FROM items i JOIN users u ON u.id = i.owner_id WHERE i.id = :id LIMIT 1');
+        $stmt = $this->db->prepare('SELECT i.title, i.owner_id, u.display_name AS owner_name FROM items i JOIN users u ON u.id = i.owner_id WHERE i.id = :id AND i.deleted_at IS NULL LIMIT 1');
         $stmt->execute(['id' => $itemId]);
         return $stmt->fetch() ?: null;
     }

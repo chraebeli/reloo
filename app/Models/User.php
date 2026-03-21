@@ -20,6 +20,13 @@ final class User
         return (int) $this->db->lastInsertId();
     }
 
+    public function findById(int $userId): ?array
+    {
+        $stmt = $this->db->prepare('SELECT id, name, display_name, email, role FROM users WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $userId]);
+        return $stmt->fetch() ?: null;
+    }
+
     public function findByEmail(string $email): ?array
     {
         $stmt = $this->db->prepare('SELECT * FROM users WHERE email = :email LIMIT 1');

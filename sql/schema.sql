@@ -86,11 +86,17 @@ CREATE TABLE items (
   visibility ENUM('group_internal','public') NOT NULL DEFAULT 'group_internal',
   created_at DATETIME NOT NULL,
   updated_at DATETIME NULL,
+  deleted_at DATETIME NULL,
+  deleted_by INT UNSIGNED NULL,
+  deleted_by_role ENUM('admin','member') NULL,
+  deletion_reason TEXT NULL,
   INDEX idx_items_group (group_id),
   INDEX idx_items_owner (owner_id),
+  INDEX idx_items_deleted_at (deleted_at),
   CONSTRAINT fk_items_group FOREIGN KEY (group_id) REFERENCES `groups`(id) ON DELETE CASCADE,
   CONSTRAINT fk_items_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
-  CONSTRAINT fk_items_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+  CONSTRAINT fk_items_category FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+  CONSTRAINT fk_items_deleted_by FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE item_images (
@@ -164,6 +170,22 @@ CREATE TABLE notifications (
   created_at DATETIME NOT NULL,
   INDEX idx_notifications_user_read (user_id, is_read, created_at),
   CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE item_deletion_log (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  item_id INT UNSIGNED NOT NULL,
+  item_title VARCHAR(180) NOT NULL,
+  ownership_type ENUM('privat_verleihbar','privat_verschenken','privat_tausch','gemeinschaftlich') NOT NULL,
+  deleted_by INT UNSIGNED NOT NULL,
+  deleted_by_role ENUM('admin','member') NOT NULL,
+  owner_id INT UNSIGNED NOT NULL,
+  admin_reason TEXT NULL,
+  created_at DATETIME NOT NULL,
+  INDEX idx_item_deletion_log_item_created (item_id, created_at),
+  INDEX idx_item_deletion_log_deleted_by (deleted_by, created_at),
+  CONSTRAINT fk_item_deletion_log_deleted_by FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_item_deletion_log_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE activity_log (
