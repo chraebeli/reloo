@@ -14,6 +14,37 @@
     </div>
   </div>
   <div class="col-lg-6">
+    <?php if ($canDeleteItem): ?>
+      <div class="card p-3 mb-3 border-danger-subtle">
+        <h2 class="h5 text-danger">Gegenstand löschen</h2>
+        <?php if ($deleteBlockedByState): ?>
+          <div class="alert alert-warning mb-3"><?= e($deleteBlockedByState) ?></div>
+        <?php else: ?>
+          <p class="text-muted small mb-3">
+            <?= $requiresAdminReason
+              ? 'Als Administrator kannst du diesen Gegenstand löschen. Bitte dokumentiere die Begründung verpflichtend.'
+              : 'Du kannst diesen Gegenstand löschen, weil du der ursprüngliche Besitzer bist und es sich nicht um einen gemeinschaftlichen Gegenstand handelt.' ?>
+          </p>
+        <?php endif; ?>
+        <form method="post" action="<?= e(app_base_path($config)) ?>/items/delete" onsubmit="return confirm('Soll dieser Gegenstand wirklich gelöscht werden?');">
+          <?= csrf_field() ?>
+          <input type="hidden" name="item_id" value="<?= (int) $item['id'] ?>">
+          <?php if ($requiresAdminReason): ?>
+            <div class="mb-3">
+              <label class="form-label" for="admin_reason">Begründung für die administrative Löschung</label>
+              <textarea class="form-control" id="admin_reason" name="admin_reason" rows="3" minlength="10" required placeholder="Bitte Grund angeben"></textarea>
+              <div class="form-text">Pflichtfeld, mindestens 10 Zeichen.</div>
+            </div>
+          <?php endif; ?>
+          <button class="btn btn-danger" <?= $deleteBlockedByState ? 'disabled aria-disabled="true"' : '' ?>>Löschen</button>
+        </form>
+      </div>
+    <?php elseif ($deleteHint): ?>
+      <div class="card p-3 mb-3 border-warning-subtle">
+        <h2 class="h5">Löschung nicht möglich</h2>
+        <p class="mb-0 text-muted"><?= e($deleteHint) ?></p>
+      </div>
+    <?php endif; ?>
     <div class="card p-3 mb-3">
       <h2 class="h5">Anfrage senden</h2>
       <form method="post" action="<?= e(app_base_path($config)) ?>/loans/request">

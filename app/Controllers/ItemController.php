@@ -6,7 +6,11 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Session;
+use App\Models\Activity;
 use App\Models\Item;
+use App\Models\User;
+use App\Services\ItemDeletionService;
+use Throwable;
 
 final class ItemController extends Controller
 {
@@ -76,14 +80,74 @@ final class ItemController extends Controller
     {
         $this->requireAuth();
         $itemId = (int) ($_GET['id'] ?? 0);
-        $item = (new Item($this->db))->findForUser($itemId, current_user_id() ?? 0);
+        $itemModel = new Item($this->db);
+        $item = $itemModel->findForUser($itemId, current_user_id() ?? 0);
 
         if (!$item) {
             http_response_code(404);
             exit('Gegenstand nicht gefunden.');
         }
 
-        $this->view('items/show', ['item' => $item]);
+        $currentUser = $this->currentUser();
+        $deletionService = new ItemDeletionService($this->db, $itemModel, new Activity($this->db));
+        $deletionEvaluation = $deletionService->getDeletionEvaluation($currentUser, $item, null);
+
+        $this->view('items/show', [
+            'item' => $item,
+            'canDeleteItem' => $deletionService->canDeleteItem($currentUser, $item),
+            'deleteHint' => $deletionEvaluation['message'] ?? null,
+            'requiresAdminReason' => (bool) ($deletionEvaluation['requires_reason'] ?? false),
+            'deleteBlockedByState' => $deletionService->blockingStateMessage((int) $item['id']),
+        ]);
+    }
+
+    public function delete(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+
+        $itemId = (int) ($_POST['item_id'] ?? 0);
+        if ($itemId <= 0) {
+            Session::flash('error', 'Ungültiger Gegenstand.');
+            $this->redirect('/items');
+        }
+
+        $itemModel = new Item($this->db);
+        $item = $itemModel->findDeletionCandidateById($itemId);
+        if (!$item) {
+            http_response_code(404);
+            exit('Gegenstand nicht gefunden.');
+        }
+
+        $currentUser = $this->currentUser();
+        $deletionService = new ItemDeletionService($this->db, $itemModel, new Activity($this->db));
+
+        try {
+            $result = $deletionService->deleteItem($currentUser, $item, trim($_POST['admin_reason'] ?? '') ?: null);
+        } catch (Throwable) {
+            Session::flash('error', 'Der Gegenstand konnte nicht gelöscht werden.');
+            $this->redirect('/items/show?id=' . $itemId);
+        }
+
+        if (!$result['allowed']) {
+            Session::flash('error', $result['detail'] ?? $result['message'] ?? 'Der Gegenstand konnte nicht gelöscht werden.');
+            $this->redirect('/items/show?id=' . $itemId);
+        }
+
+        Session::flash('success', $result['message'] ?? 'Der Gegenstand wurde erfolgreich gelöscht.');
+        $this->redirect('/items');
+    }
+
+    private function currentUser(): array
+    {
+        $userId = current_user_id() ?? 0;
+        $user = (new User($this->db))->findById($userId);
+
+        return $user ?? [
+            'id' => $userId,
+            'display_name' => (string) ($_SESSION['display_name'] ?? ''),
+            'role' => current_user_role(),
+        ];
     }
 
     private function handleImageUpload(Item $itemModel, int $itemId): void

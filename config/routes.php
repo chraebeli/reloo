@@ -34,6 +34,7 @@ $router->get('/items', [ItemController::class, 'index']);
 $router->get('/items/new', [ItemController::class, 'createForm']);
 $router->post('/items/create', [ItemController::class, 'create']);
 $router->get('/items/show', [ItemController::class, 'show']);
+$router->post('/items/delete', [ItemController::class, 'delete']);
 
 $router->get('/loans', [LoanController::class, 'index']);
 $router->post('/loans/request', [LoanController::class, 'request']);
