@@ -535,3 +535,23 @@ textarea.form-control {
     align-items: flex-start;
   }
 }
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--text-secondary);
+  margin: 1rem 0;
+  font-size: 0.88rem;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.login-divider span {
+  padding: 0 0.75rem;
+}
