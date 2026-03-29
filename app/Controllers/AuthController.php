@@ -8,12 +8,15 @@ use App\Core\Controller;
 use App\Core\Session;
 use App\Models\EmailVerification;
 use App\Models\User;
+use App\Models\UserPasskey;
 use App\Services\Logger;
 use App\Services\Notifier;
+use App\Services\WebAuthnService;
 use Throwable;
 
 final class AuthController extends Controller
 {
+    private ?array $jsonPayloadCache = null;
     private const EMAIL_VERIFICATION_TTL_SECONDS = 86400;
     private const EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
 
@@ -44,7 +47,7 @@ final class AuthController extends Controller
         $userModel = new User($this->db);
         $user = $userModel->findByEmail($email);
 
-        if (!$user || !password_verify($password, $user['password_hash'])) {
+        if (!$user || !password_verify($password, (string) $user['password_hash'])) {
             $_SESSION['login_attempts'] = (int) ($_SESSION['login_attempts'] ?? 0) + 1;
             if ($_SESSION['login_attempts'] >= 5) {
                 $_SESSION['login_block_until'] = time() + 180;
@@ -55,37 +58,106 @@ final class AuthController extends Controller
             $this->redirect('/login');
         }
 
-        if (empty($user['email_verified_at'])) {
-            Logger::info('Login denied: email not verified', ['user_id' => (int) $user['id']]);
-            Session::flash('error', 'Deine E-Mail-Adresse wurde noch nicht bestätigt. Bitte prüfe dein Postfach oder fordere einen neuen Bestätigungslink an.');
-            $_SESSION['verification_email_hint'] = (string) $user['email'];
-            $this->redirect('/verification/resend');
-        }
-
-        $approvalStatus = $user['approval_status'] ?? 'approved';
-        if ($approvalStatus === 'pending') {
-            Logger::info('Login denied: account pending approval', ['user_id' => (int) $user['id']]);
-            Session::flash('error', 'Dein Konto wurde registriert und wartet noch auf die Freigabe durch einen Administrator.');
-            $this->redirect('/login');
-        }
-
-        if ($approvalStatus === 'rejected') {
-            Logger::warning('Login denied: account rejected', ['user_id' => (int) $user['id']]);
-            Session::flash('error', 'Deine Registrierung wurde aktuell nicht freigegeben. Bitte kontaktiere den Administrator.');
-            $this->redirect('/login');
+        if (!$this->ensureUserCanLogin($user, true)) {
+            return;
         }
 
         $_SESSION['login_attempts'] = 0;
         unset($_SESSION['login_block_until']);
 
-        session_regenerate_id(true);
-        $_SESSION['user_id'] = (int) $user['id'];
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['display_name'] = $user['display_name'];
-
-        Logger::info('Login successful', ['user_id' => (int) $user['id'], 'role' => (string) $user['role']]);
-
+        $this->loginUser($user);
+        Logger::info('Login successful', ['user_id' => (int) $user['id'], 'role' => (string) $user['role'], 'method' => 'password']);
         $this->redirect('/dashboard');
+    }
+
+    public function passkeyAuthenticationOptions(): void
+    {
+        $this->verifyJsonCsrf();
+
+        $service = new WebAuthnService();
+        $challenge = $service->generateChallenge();
+
+        $_SESSION['passkey_auth_challenge'] = $challenge;
+        $_SESSION['passkey_auth_expires'] = time() + 300;
+
+        $this->json([
+            'challenge' => $challenge,
+            'timeout' => 60000,
+        ]);
+    }
+
+    public function passkeyAuthenticationVerify(): void
+    {
+        $this->verifyJsonCsrf();
+
+        $payload = $this->jsonBody();
+        $challenge = (string) ($_SESSION['passkey_auth_challenge'] ?? '');
+        $expiresAt = (int) ($_SESSION['passkey_auth_expires'] ?? 0);
+        if ($challenge === '' || time() > $expiresAt) {
+            $this->json(['error' => 'Passkey-Anmeldung abgelaufen. Bitte erneut starten.'], 422);
+        }
+
+        $credentialId = (string) ($payload['credentialId'] ?? '');
+        $clientDataJson = base64_decode((string) ($payload['clientDataJSON'] ?? ''), true);
+        $authenticatorData = base64_decode((string) ($payload['authenticatorData'] ?? ''), true);
+        $signature = base64_decode((string) ($payload['signature'] ?? ''), true);
+
+        if ($credentialId === '' || !$clientDataJson || !$authenticatorData || !$signature) {
+            $this->json(['error' => 'Ungültige Passkey-Antwort.'], 422);
+        }
+
+        $passkeyModel = new UserPasskey($this->db);
+        $passkey = $passkeyModel->findByCredentialId($credentialId);
+        if (!$passkey) {
+            $this->json(['error' => 'Passkey nicht bekannt.'], 422);
+        }
+
+        $user = (new User($this->db))->findById((int) $passkey['user_id']);
+        if (!$user) {
+            $this->json(['error' => 'Benutzer nicht gefunden.'], 422);
+        }
+
+        if (!$this->ensureUserCanLogin($user, false)) {
+            return;
+        }
+
+        $service = new WebAuthnService();
+        $clientData = json_decode($clientDataJson, true);
+        $parsedAuthData = $service->parseAuthenticatorData($authenticatorData);
+        $publicKeyDer = $service->base64UrlDecode((string) $passkey['public_key_spki']);
+
+        if (!is_array($clientData) || !$parsedAuthData) {
+            $this->json(['error' => 'Passkey-Daten konnten nicht geprüft werden.'], 422);
+        }
+
+        $origin = $this->expectedOrigin();
+        $rpId = parse_url($origin, PHP_URL_HOST) ?: 'localhost';
+
+        if (
+            !$service->verifyType($clientData, 'webauthn.get')
+            || !$service->verifyChallenge($clientData, $challenge)
+            || !$service->verifyOrigin($clientData, $origin)
+            || !$service->verifyRpIdHash((string) $parsedAuthData['rp_id_hash'], (string) $rpId)
+            || !$service->isUserPresent((int) $parsedAuthData['flags'])
+            || !$service->verifyAssertionSignature($authenticatorData, $clientDataJson, $signature, $publicKeyDer)
+        ) {
+            $this->json(['error' => 'Passkey-Prüfung fehlgeschlagen.'], 422);
+        }
+
+        if ((int) $parsedAuthData['sign_count'] > 0 && (int) $passkey['sign_count'] > 0 && (int) $parsedAuthData['sign_count'] <= (int) $passkey['sign_count']) {
+            $this->json(['error' => 'Passkey-Sicherheitsprüfung fehlgeschlagen.'], 422);
+        }
+
+        $passkeyModel->touchUsage((int) $passkey['id'], (int) $parsedAuthData['sign_count']);
+
+        unset($_SESSION['passkey_auth_challenge'], $_SESSION['passkey_auth_expires']);
+        $_SESSION['login_attempts'] = 0;
+        unset($_SESSION['login_block_until']);
+
+        $this->loginUser($user);
+        Logger::info('Login successful', ['user_id' => (int) $user['id'], 'role' => (string) $user['role'], 'method' => 'passkey']);
+
+        $this->json(['success' => true, 'redirect' => app_base_path($this->config) . '/dashboard']);
     }
 
     public function showRegister(): void
@@ -176,19 +248,37 @@ final class AuthController extends Controller
             $this->redirect('/verification/resend');
         }
 
-        $tokenHash = hash('sha256', $token);
-        $verificationModel = new EmailVerification($this->db);
-        $verification = $verificationModel->consumeValidToken($tokenHash);
+        try {
+            $tokenHash = hash('sha256', $token);
+            $verificationModel = new EmailVerification($this->db);
+            $verification = $verificationModel->consumeValidToken($tokenHash);
 
-        if (!$verification) {
-            Session::flash('error', 'Dieser Bestätigungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+            if (!$verification) {
+                Session::flash('error', 'Dieser Bestätigungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+                $this->redirect('/verification/resend');
+            }
+
+            $userModel = new User($this->db);
+            $applied = $userModel->applyVerifiedPendingEmail((int) $verification['user_id'], (string) $verification['email']);
+
+            if (!$applied) {
+                $userModel->markEmailVerified((int) $verification['user_id']);
+                Session::flash('success', 'Deine E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
+                $this->redirect('/login');
+            }
+
+            if ((int) ($_SESSION['user_id'] ?? 0) === (int) $verification['user_id']) {
+                Session::flash('success', 'Deine neue E-Mail-Adresse wurde erfolgreich bestätigt.');
+                $this->redirect('/settings');
+            }
+
+            Session::flash('success', 'Deine neue E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
+            $this->redirect('/login');
+        } catch (Throwable $exception) {
+            Logger::error('Email verification failed unexpectedly', ['exception' => $exception->getMessage()]);
+            Session::flash('error', 'Der Bestätigungslink konnte gerade nicht verarbeitet werden. Bitte fordere einen neuen Link an.');
             $this->redirect('/verification/resend');
         }
-
-        (new User($this->db))->markEmailVerified((int) $verification['user_id']);
-
-        Session::flash('success', 'Deine E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
-        $this->redirect('/login');
     }
 
     public function showForgotPassword(): void
@@ -317,11 +407,88 @@ HTML;
         }
     }
 
-    private function buildAbsolutePath(string $path): string
+    private function ensureUserCanLogin(array $user, bool $redirectWithFlash): bool
+    {
+        if (empty($user['email_verified_at'])) {
+            if ($redirectWithFlash) {
+                Session::flash('error', 'Deine E-Mail-Adresse wurde noch nicht bestätigt. Bitte prüfe dein Postfach oder fordere einen neuen Bestätigungslink an.');
+                $_SESSION['verification_email_hint'] = (string) $user['email'];
+                $this->redirect('/verification/resend');
+            }
+
+            $this->json(['error' => 'E-Mail-Adresse nicht bestätigt.'], 403);
+        }
+
+        $approvalStatus = $user['approval_status'] ?? 'approved';
+        if ($approvalStatus === 'pending') {
+            if ($redirectWithFlash) {
+                Session::flash('error', 'Dein Konto wurde registriert und wartet noch auf die Freigabe durch einen Administrator.');
+                $this->redirect('/login');
+            }
+
+            $this->json(['error' => 'Konto wartet auf Freigabe.'], 403);
+        }
+
+        if ($approvalStatus === 'rejected') {
+            if ($redirectWithFlash) {
+                Session::flash('error', 'Deine Registrierung wurde aktuell nicht freigegeben. Bitte kontaktiere den Administrator.');
+                $this->redirect('/login');
+            }
+
+            $this->json(['error' => 'Konto nicht freigegeben.'], 403);
+        }
+
+        return true;
+    }
+
+    private function loginUser(array $user): void
+    {
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = (int) $user['id'];
+        $_SESSION['role'] = (string) $user['role'];
+        $_SESSION['display_name'] = (string) $user['display_name'];
+    }
+
+    private function expectedOrigin(): string
     {
         $scheme = !empty($_SERVER['HTTPS']) ? 'https' : 'http';
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 
-        return $scheme . '://' . $host . app_base_path($this->config) . $path;
+        return $scheme . '://' . $host;
+    }
+
+    private function buildAbsolutePath(string $path): string
+    {
+        return $this->expectedOrigin() . app_base_path($this->config) . $path;
+    }
+
+    private function verifyJsonCsrf(): void
+    {
+        $payload = $this->jsonBody();
+        $token = (string) ($payload['_csrf'] ?? '');
+        if (!hash_equals((string) ($_SESSION['_csrf'] ?? ''), $token)) {
+            $this->json(['error' => 'CSRF-Token ungültig.'], 419);
+        }
+    }
+
+    private function jsonBody(): array
+    {
+        if ($this->jsonPayloadCache !== null) {
+            return $this->jsonPayloadCache;
+        }
+
+        $raw = file_get_contents('php://input');
+        $data = json_decode((string) $raw, true);
+        $this->jsonPayloadCache = is_array($data) ? $data : [];
+
+        return $this->jsonPayloadCache;
+    }
+
+    private function json(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+        exit;
     }
 }

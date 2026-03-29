@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Controllers\AccountController;
 use App\Controllers\AdminController;
 use App\Controllers\AuthController;
 use App\Controllers\DashboardController;
@@ -23,6 +24,19 @@ $router->post('/password/forgot', [AuthController::class, 'sendReset']);
 $router->get('/password/reset', [AuthController::class, 'showResetPassword']);
 $router->post('/password/reset', [AuthController::class, 'resetPassword']);
 $router->post('/logout', [AuthController::class, 'logout']);
+
+
+$router->get('/settings', [AccountController::class, 'index']);
+$router->post('/settings/display-name', [AccountController::class, 'updateDisplayName']);
+$router->post('/settings/email', [AccountController::class, 'updateEmail']);
+$router->post('/settings/email/resend', [AccountController::class, 'resendPendingEmail']);
+$router->post('/settings/password', [AccountController::class, 'changePassword']);
+$router->post('/settings/passkeys/options', [AccountController::class, 'passkeyOptions']);
+$router->post('/settings/passkeys/register', [AccountController::class, 'passkeyRegister']);
+$router->post('/settings/passkeys/delete', [AccountController::class, 'removePasskey']);
+
+$router->post('/login/passkey/options', [AuthController::class, 'passkeyAuthenticationOptions']);
+$router->post('/login/passkey/verify', [AuthController::class, 'passkeyAuthenticationVerify']);
 
 $router->get('/dashboard', [DashboardController::class, 'index']);
 
