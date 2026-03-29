@@ -9,11 +9,17 @@ use App\Core\Session;
 use App\Models\Activity;
 use App\Models\Item;
 use App\Models\User;
+use App\Services\ImageProcessor;
 use App\Services\ItemDeletionService;
+use App\Services\Logger;
+use App\Services\OpenAIItemSuggestionService;
 use Throwable;
 
 final class ItemController extends Controller
 {
+    private const MAX_FILE_SIZE = 5242880;
+    private const MAX_FILES = 6;
+
     public function index(): void
     {
         $this->requireAuth();
@@ -32,7 +38,11 @@ final class ItemController extends Controller
         $this->requireAuth();
         $itemModel = new Item($this->db);
         $groups = (new \App\Models\Group($this->db))->allForUser(current_user_id() ?? 0);
-        $this->view('items/create', ['categories' => $itemModel->categories(), 'groups' => $groups]);
+        $this->view('items/create', [
+            'categories' => $itemModel->categories(),
+            'groups' => $groups,
+            'knownTags' => $itemModel->existingTagsForUser(current_user_id() ?? 0),
+        ]);
     }
 
     public function create(): void
@@ -74,6 +84,79 @@ final class ItemController extends Controller
 
         Session::flash('success', 'Gegenstand gespeichert.');
         $this->redirect('/items');
+    }
+
+    public function suggestFromImage(): void
+    {
+        $this->requireAuth();
+        verify_csrf();
+
+        $upload = $_FILES['image'] ?? null;
+        if (!is_array($upload)) {
+            $this->json(['ok' => false, 'message' => 'Kein Bild übertragen.'], 400);
+        }
+
+        $tmpPath = (string) ($upload['tmp_name'] ?? '');
+        $errorCode = (int) ($upload['error'] ?? UPLOAD_ERR_NO_FILE);
+        $size = (int) ($upload['size'] ?? 0);
+
+        if ($errorCode !== UPLOAD_ERR_OK) {
+            $this->json(['ok' => false, 'message' => 'Bild konnte nicht hochgeladen werden.'], 400);
+        }
+        if (!is_uploaded_file($tmpPath)) {
+            $this->json(['ok' => false, 'message' => 'Ungültige Upload-Quelle erkannt.'], 400);
+        }
+        if ($size <= 0 || $size > self::MAX_FILE_SIZE) {
+            $this->json(['ok' => false, 'message' => 'Dateigröße ungültig oder größer als 5 MB.'], 400);
+        }
+
+        $processor = new ImageProcessor();
+
+        try {
+            $imageInfo = $processor->inspectUploadedImage($tmpPath);
+            $optimized = $processor->optimize($tmpPath, $imageInfo['mime']);
+        } catch (Throwable $exception) {
+            $this->json(['ok' => false, 'message' => $exception->getMessage()], 400);
+        }
+
+        $itemModel = new Item($this->db);
+        $suggestionService = new OpenAIItemSuggestionService($this->config);
+        $existingCategories = $itemModel->categoryNames();
+        $existingTags = $itemModel->existingTagsForUser(current_user_id() ?? 0);
+
+        $dataUrl = 'data:' . $optimized['mime'] . ';base64,' . base64_encode($optimized['binary']);
+
+        try {
+            $suggestion = $suggestionService->suggestFromImageDataUrl($dataUrl, $existingCategories, $existingTags);
+        } catch (Throwable $exception) {
+            Logger::warning('Item suggestion via OpenAI failed', ['error' => $exception->getMessage()]);
+            $this->json([
+                'ok' => false,
+                'message' => 'Die automatische Erkennung war nicht möglich. Du kannst den Gegenstand manuell erfassen.',
+            ]);
+        }
+
+        if ($suggestion === null) {
+            $this->json([
+                'ok' => false,
+                'message' => $this->suggestionFailureMessage($suggestionService->lastErrorCode()),
+            ]);
+        }
+
+        $mappedCategory = $this->mapToExistingCategory($suggestion['category'], $itemModel->categories());
+        $normalizedTags = $this->normalizeSuggestedTags($suggestion['tags'], $existingTags);
+
+        $this->json([
+            'ok' => true,
+            'message' => 'Vorschläge aus dem Foto übernommen.',
+            'suggestions' => [
+                'title' => $suggestion['title'],
+                'category_id' => $mappedCategory['id'] ?? null,
+                'category_name' => $mappedCategory['name'] ?? $suggestion['category'],
+                'description' => $suggestion['description'],
+                'tags' => $normalizedTags,
+            ],
+        ]);
     }
 
     public function show(): void
@@ -156,9 +239,6 @@ final class ItemController extends Controller
             return;
         }
 
-        $allowedMimes = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
-        $maxFileSize = 5 * 1024 * 1024;
-        $maxFiles = 6;
         $uploadDir = __DIR__ . '/../../public/uploads/items';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0755, true);
@@ -166,45 +246,46 @@ final class ItemController extends Controller
 
         $errors = [];
         $processed = 0;
+        $processor = new ImageProcessor();
 
         foreach ($_FILES['images']['tmp_name'] as $index => $tmpPath) {
-            if ($processed >= $maxFiles) {
+            if ($processed >= self::MAX_FILES) {
                 break;
             }
 
-            if (($_FILES['images']['error'][$index] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            $errorCode = (int) ($_FILES['images']['error'][$index] ?? UPLOAD_ERR_NO_FILE);
+            if ($errorCode !== UPLOAD_ERR_OK) {
                 $errors[] = 'Eine Datei konnte nicht hochgeladen werden.';
                 continue;
             }
+
+            $tmpPath = (string) $tmpPath;
             if (!is_uploaded_file($tmpPath)) {
                 $errors[] = 'Ungültige Upload-Quelle erkannt.';
                 continue;
             }
 
-            $mime = mime_content_type($tmpPath);
-            if (!isset($allowedMimes[$mime])) {
-                $errors[] = 'Nur JPG, PNG und WEBP sind erlaubt.';
-                continue;
-            }
-
-            $size = filesize($tmpPath);
-            if ($size === false || $size > $maxFileSize) {
+            $size = (int) ($_FILES['images']['size'][$index] ?? 0);
+            if ($size <= 0 || $size > self::MAX_FILE_SIZE) {
                 $errors[] = 'Eine Datei überschreitet das 5-MB-Limit.';
                 continue;
             }
 
-            $imgInfo = @getimagesize($tmpPath);
-            if (!is_array($imgInfo) || ($imgInfo[0] ?? 0) < 80 || ($imgInfo[1] ?? 0) < 80) {
-                $errors[] = 'Bildauflösung zu klein (mind. 80x80 Pixel).';
+            try {
+                $imageInfo = $processor->inspectUploadedImage($tmpPath);
+                $optimized = $processor->optimize($tmpPath, $imageInfo['mime']);
+            } catch (Throwable $exception) {
+                $errors[] = $exception->getMessage();
                 continue;
             }
 
-            $filename = bin2hex(random_bytes(16)) . '.' . $allowedMimes[$mime];
+            $filename = bin2hex(random_bytes(16)) . '.' . $optimized['extension'];
             $target = $uploadDir . '/' . $filename;
-            if (!move_uploaded_file($tmpPath, $target)) {
+            if (file_put_contents($target, $optimized['binary'], LOCK_EX) === false) {
                 $errors[] = 'Bild konnte nicht gespeichert werden.';
                 continue;
             }
+
             $itemModel->addImage($itemId, 'uploads/items/' . $filename);
             $processed++;
         }
@@ -212,5 +293,142 @@ final class ItemController extends Controller
         if ($errors !== []) {
             Session::flash('error', implode(' ', array_unique($errors)));
         }
+    }
+
+    /** @param list<array{id:int,name:string}> $categories */
+    private function mapToExistingCategory(string $suggestedCategory, array $categories): ?array
+    {
+        $needle = $this->normalizeTerm($suggestedCategory);
+        if ($needle === '') {
+            return null;
+        }
+
+        foreach ($categories as $category) {
+            if ($needle === $this->normalizeTerm((string) $category['name'])) {
+                return ['id' => (int) $category['id'], 'name' => (string) $category['name']];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $suggestedTags
+     * @param list<string> $existingTags
+     * @return list<string>
+     */
+    private function normalizeSuggestedTags(array $suggestedTags, array $existingTags): array
+    {
+        $existingLookup = [];
+        foreach ($existingTags as $tag) {
+            $normalized = $this->normalizeTerm($tag);
+            if ($normalized !== '' && !isset($existingLookup[$normalized])) {
+                $existingLookup[$normalized] = $tag;
+            }
+        }
+
+        $result = [];
+        $seen = [];
+
+        foreach ($suggestedTags as $rawTag) {
+            $tag = trim((string) $rawTag);
+            if ($tag === '') {
+                continue;
+            }
+
+            $normalized = $this->normalizeTerm($tag);
+            if ($normalized === '') {
+                continue;
+            }
+
+            $mapped = $existingLookup[$normalized] ?? $this->findClosestExistingTag($tag, $existingTags);
+            $finalTag = $mapped ?? $this->toTitleCase($tag);
+            $finalKey = $this->normalizeTerm($finalTag);
+
+            if ($finalKey === '' || isset($seen[$finalKey])) {
+                continue;
+            }
+
+            $seen[$finalKey] = true;
+            $result[] = $finalTag;
+        }
+
+        return $result;
+    }
+
+    /** @param list<string> $existingTags */
+    private function findClosestExistingTag(string $tag, array $existingTags): ?string
+    {
+        $needle = $this->normalizeTerm($tag);
+        if ($needle === '') {
+            return null;
+        }
+
+        $best = null;
+        $bestScore = 0.0;
+
+        foreach ($existingTags as $existing) {
+            $candidate = $this->normalizeTerm($existing);
+            if ($candidate === '') {
+                continue;
+            }
+
+            if (str_contains($candidate, $needle) || str_contains($needle, $candidate)) {
+                return $existing;
+            }
+
+            similar_text($needle, $candidate, $percent);
+            if ($percent > $bestScore) {
+                $bestScore = $percent;
+                $best = $existing;
+            }
+
+            $distance = levenshtein($needle, $candidate);
+            $maxLength = max(strlen($needle), strlen($candidate));
+            if ($maxLength > 0) {
+                $distanceScore = (1 - ($distance / $maxLength)) * 100;
+                if ($distanceScore > $bestScore) {
+                    $bestScore = $distanceScore;
+                    $best = $existing;
+                }
+            }
+        }
+
+        return $bestScore >= 72.0 ? $best : null;
+    }
+
+    private function normalizeTerm(string $value): string
+    {
+        $value = trim(mb_strtolower($value, 'UTF-8'));
+        $value = strtr($value, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        $value = preg_replace('/[^a-z0-9]+/u', '', $value) ?? '';
+
+        return $value;
+    }
+
+    private function toTitleCase(string $value): string
+    {
+        return mb_convert_case(trim($value), MB_CASE_TITLE, 'UTF-8');
+    }
+
+
+
+    private function suggestionFailureMessage(?string $errorCode): string
+    {
+        return match ($errorCode) {
+            'missing_api_key' => 'Die automatische Erkennung ist noch nicht eingerichtet (OpenAI API Key fehlt). Du kannst den Gegenstand manuell erfassen.',
+            'insufficient_quota' => 'Das KI-Kontingent ist aufgebraucht. Bitte API-Abrechnung/Kontingent prüfen. Du kannst den Gegenstand manuell erfassen.',
+            'rate_limited' => 'Der KI-Dienst ist gerade ausgelastet. Bitte in wenigen Sekunden erneut versuchen oder manuell erfassen.',
+            'auth_error' => 'Die KI-Konfiguration ist ungültig (Authentifizierung fehlgeschlagen). Du kannst den Gegenstand manuell erfassen.',
+            default => 'Die automatische Erkennung war nicht möglich. Du kannst den Gegenstand manuell erfassen.',
+        };
+    }
+
+    private function json(array $payload, int $status = 200): void
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+        exit;
     }
 }
