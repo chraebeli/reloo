@@ -32,6 +32,7 @@ $isAuthPage = in_array($title ?? '', ['Login', 'Registrierung', 'Passwort verges
             <a class="nav-link <?= $currentPath === '/groups' ? 'is-active' : '' ?>" href="<?= e($basePath) ?>/groups">Gruppen</a>
             <a class="nav-link <?= $currentPath === '/loans' ? 'is-active' : '' ?>" href="<?= e($basePath) ?>/loans">Ausleihen</a>
             <a class="nav-link <?= $currentPath === '/repairs' ? 'is-active' : '' ?>" href="<?= e($basePath) ?>/repairs">Reparaturen</a>
+            <a class="nav-link <?= $currentPath === '/settings' ? 'is-active' : '' ?>" href="<?= e($basePath) ?>/settings">Mein Konto</a>
             <?php if (user_is_admin()): ?>
             <a class="nav-link <?= (str_starts_with($currentPath, '/admin')) ? 'is-active' : '' ?>" href="<?= e($basePath) ?>/admin">Admin</a>
             <?php endif; ?>

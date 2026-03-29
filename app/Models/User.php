@@ -22,7 +22,7 @@ final class User
 
     public function findById(int $userId): ?array
     {
-        $stmt = $this->db->prepare('SELECT id, name, display_name, email, role FROM users WHERE id = :id LIMIT 1');
+        $stmt = $this->db->prepare('SELECT id, name, display_name, email, pending_email, role, approval_status, email_verified_at, password_hash FROM users WHERE id = :id LIMIT 1');
         $stmt->execute(['id' => $userId]);
         return $stmt->fetch() ?: null;
     }
@@ -34,10 +34,52 @@ final class User
         return $stmt->fetch() ?: null;
     }
 
+    public function isEmailInUse(string $email, ?int $ignoreUserId = null): bool
+    {
+        $sql = 'SELECT COUNT(*) FROM users WHERE (email = :email OR pending_email = :email)';
+        $params = ['email' => $email];
+
+        if ($ignoreUserId !== null) {
+            $sql .= ' AND id != :ignore_user_id';
+            $params['ignore_user_id'] = $ignoreUserId;
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
     public function markEmailVerified(int $userId): void
     {
         $stmt = $this->db->prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = :id');
         $stmt->execute(['id' => $userId]);
+    }
+
+    public function setPendingEmail(int $userId, string $email): void
+    {
+        $stmt = $this->db->prepare('UPDATE users SET pending_email = :email, updated_at = NOW() WHERE id = :id');
+        $stmt->execute(['email' => $email, 'id' => $userId]);
+    }
+
+    public function applyVerifiedPendingEmail(int $userId, string $email): bool
+    {
+        $stmt = $this->db->prepare('UPDATE users SET email = :email, pending_email = NULL, email_verified_at = NOW(), updated_at = NOW() WHERE id = :id AND pending_email = :email');
+        $stmt->execute(['email' => $email, 'id' => $userId]);
+
+        return $stmt->rowCount() === 1;
+    }
+
+    public function clearPendingEmail(int $userId): void
+    {
+        $stmt = $this->db->prepare('UPDATE users SET pending_email = NULL, updated_at = NOW() WHERE id = :id');
+        $stmt->execute(['id' => $userId]);
+    }
+
+    public function updateDisplayName(int $userId, string $displayName): void
+    {
+        $stmt = $this->db->prepare('UPDATE users SET display_name = :display_name, updated_at = NOW() WHERE id = :id');
+        $stmt->execute(['display_name' => $displayName, 'id' => $userId]);
     }
 
     public function setResetToken(int $userId, string $token, string $expiresAt): void
