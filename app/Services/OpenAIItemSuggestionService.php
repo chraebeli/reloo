@@ -8,8 +8,15 @@ use RuntimeException;
 
 final class OpenAIItemSuggestionService
 {
+    private ?string $lastErrorCode = null;
+
     public function __construct(private array $config)
     {
+    }
+
+    public function lastErrorCode(): ?string
+    {
+        return $this->lastErrorCode;
     }
 
     /**
@@ -19,8 +26,11 @@ final class OpenAIItemSuggestionService
      */
     public function suggestFromImageDataUrl(string $imageDataUrl, array $preferredCategories, array $preferredTags): ?array
     {
+        $this->lastErrorCode = null;
+
         $apiKey = trim((string) ($this->config['openai']['api_key'] ?? ''));
         if ($apiKey === '') {
+            $this->lastErrorCode = 'missing_api_key';
             return null;
         }
 
@@ -86,25 +96,49 @@ final class OpenAIItemSuggestionService
         }
 
         if ($status < 200 || $status >= 300) {
-            Logger::warning('OpenAI returned non-success status', ['status' => $status]);
+            $errorPayload = json_decode($raw, true);
+            $error = is_array($errorPayload['error'] ?? null) ? $errorPayload['error'] : [];
+            $errorType = (string) ($error['type'] ?? '');
+            $errorCode = (string) ($error['code'] ?? '');
+            $errorMessage = (string) ($error['message'] ?? '');
+
+            if ($status === 429 && $errorCode === 'insufficient_quota') {
+                $this->lastErrorCode = 'insufficient_quota';
+            } elseif ($status === 429) {
+                $this->lastErrorCode = 'rate_limited';
+            } elseif ($status === 401 || $status === 403) {
+                $this->lastErrorCode = 'auth_error';
+            } else {
+                $this->lastErrorCode = 'api_error';
+            }
+
+            Logger::warning('OpenAI returned non-success status', [
+                'status' => $status,
+                'error_type' => $errorType,
+                'error_code' => $errorCode,
+                'error_message' => $errorMessage,
+            ]);
             return null;
         }
 
         $response = json_decode($raw, true);
         if (!is_array($response)) {
             Logger::warning('OpenAI response is not valid JSON');
+            $this->lastErrorCode = 'invalid_response';
             return null;
         }
 
         $content = $this->extractOutputText($response);
         if ($content === null || $content === '') {
             Logger::warning('OpenAI response did not include output text');
+            $this->lastErrorCode = 'invalid_response';
             return null;
         }
 
         $decoded = json_decode($content, true);
         if (!is_array($decoded)) {
             Logger::warning('OpenAI content is not valid suggestion JSON');
+            $this->lastErrorCode = 'invalid_response';
             return null;
         }
 
@@ -125,7 +159,6 @@ final class OpenAIItemSuggestionService
             'tags' => $tags,
         ];
     }
-
     /**
      * @param list<string> $preferredCategories
      * @param list<string> $preferredTags

@@ -139,7 +139,7 @@ final class ItemController extends Controller
         if ($suggestion === null) {
             $this->json([
                 'ok' => false,
-                'message' => 'Die automatische Erkennung war nicht möglich. Du kannst den Gegenstand manuell erfassen.',
+                'message' => $this->suggestionFailureMessage($suggestionService->lastErrorCode()),
             ]);
         }
 
@@ -409,6 +409,19 @@ final class ItemController extends Controller
     private function toTitleCase(string $value): string
     {
         return mb_convert_case(trim($value), MB_CASE_TITLE, 'UTF-8');
+    }
+
+
+
+    private function suggestionFailureMessage(?string $errorCode): string
+    {
+        return match ($errorCode) {
+            'missing_api_key' => 'Die automatische Erkennung ist noch nicht eingerichtet (OpenAI API Key fehlt). Du kannst den Gegenstand manuell erfassen.',
+            'insufficient_quota' => 'Das KI-Kontingent ist aufgebraucht. Bitte API-Abrechnung/Kontingent prüfen. Du kannst den Gegenstand manuell erfassen.',
+            'rate_limited' => 'Der KI-Dienst ist gerade ausgelastet. Bitte in wenigen Sekunden erneut versuchen oder manuell erfassen.',
+            'auth_error' => 'Die KI-Konfiguration ist ungültig (Authentifizierung fehlgeschlagen). Du kannst den Gegenstand manuell erfassen.',
+            default => 'Die automatische Erkennung war nicht möglich. Du kannst den Gegenstand manuell erfassen.',
+        };
     }
 
     private function json(array $payload, int $status = 200): void
