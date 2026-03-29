@@ -32,4 +32,9 @@ return [
         'ehlo_domain' => 'reloo.ch',
         'timeout' => 15,
     ],
+    'openai' => [
+        'api_key' => getenv('OPENAI_API_KEY') ?: '',
+        'base_url' => 'https://api.openai.com/v1',
+        'model' => 'gpt-4.1-mini',
+    ],
 ];

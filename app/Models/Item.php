@@ -142,4 +142,48 @@ final class Item
     {
         return $this->db->query('SELECT * FROM categories WHERE is_active = 1 ORDER BY name')->fetchAll();
     }
+
+    /** @return list<string> */
+    public function categoryNames(): array
+    {
+        $stmt = $this->db->query('SELECT name FROM categories WHERE is_active = 1 ORDER BY name');
+        $rows = $stmt ? $stmt->fetchAll() : [];
+
+        return array_values(array_filter(array_map(static fn (array $row): string => trim((string) ($row['name'] ?? '')), $rows), static fn (string $name): bool => $name !== ''));
+    }
+
+    /** @return list<string> */
+    public function existingTagsForUser(int $userId): array
+    {
+        $stmt = $this->db->prepare('SELECT i.tags
+            FROM items i
+            JOIN group_members gm ON gm.group_id = i.group_id AND gm.user_id = :user_id
+            WHERE i.deleted_at IS NULL AND i.tags IS NOT NULL AND i.tags <> ""');
+        $stmt->execute(['user_id' => $userId]);
+        $rows = $stmt->fetchAll();
+
+        $tags = [];
+        foreach ($rows as $row) {
+            $parts = preg_split('/[,;]+/u', (string) ($row['tags'] ?? '')) ?: [];
+            foreach ($parts as $part) {
+                $tag = trim($part);
+                if ($tag !== '') {
+                    $tags[] = $tag;
+                }
+            }
+        }
+
+        $unique = [];
+        foreach ($tags as $tag) {
+            $key = mb_strtolower($tag, 'UTF-8');
+            if (!isset($unique[$key])) {
+                $unique[$key] = $tag;
+            }
+        }
+
+        natcasesort($unique);
+
+        return array_values($unique);
+    }
+
 }
