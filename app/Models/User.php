@@ -51,12 +51,15 @@ final class User
     public function isEmailInUse(string $email, ?int $ignoreUserId = null): bool
     {
         if ($this->supportsPendingEmail()) {
-            $sql = 'SELECT COUNT(*) FROM users WHERE (email = :email OR pending_email = :email)';
+            $sql = 'SELECT COUNT(*) FROM users WHERE (email = :email OR pending_email = :pending_email)';
         } else {
             $sql = 'SELECT COUNT(*) FROM users WHERE email = :email';
         }
 
         $params = ['email' => $email];
+        if ($this->supportsPendingEmail()) {
+            $params['pending_email'] = $email;
+        }
 
         if ($ignoreUserId !== null) {
             $sql .= ' AND id != :ignore_user_id';
@@ -96,8 +99,12 @@ final class User
             return false;
         }
 
-        $stmt = $this->db->prepare('UPDATE users SET email = :email, pending_email = NULL, email_verified_at = NOW(), updated_at = NOW() WHERE id = :id AND pending_email = :email');
-        $stmt->execute(['email' => $email, 'id' => $userId]);
+        $stmt = $this->db->prepare('UPDATE users SET email = :new_email, pending_email = NULL, email_verified_at = NOW(), updated_at = NOW() WHERE id = :id AND pending_email = :pending_email');
+        $stmt->execute([
+            'new_email' => $email,
+            'pending_email' => $email,
+            'id' => $userId,
+        ]);
 
         return $stmt->rowCount() === 1;
     }
