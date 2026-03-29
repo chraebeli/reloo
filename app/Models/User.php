@@ -71,8 +71,13 @@ final class User
 
     public function markEmailVerified(int $userId): void
     {
-        $stmt = $this->db->prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = :id');
-        $stmt->execute(['id' => $userId]);
+        try {
+            $stmt = $this->db->prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW() WHERE id = :id');
+            $stmt->execute(['id' => $userId]);
+        } catch (Throwable) {
+            $stmt = $this->db->prepare('UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = :id');
+            $stmt->execute(['id' => $userId]);
+        }
     }
 
     public function setPendingEmail(int $userId, string $email): void

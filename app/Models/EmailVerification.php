@@ -27,7 +27,7 @@ final class EmailVerification
 
     public function consumeValidToken(string $tokenHash): ?array
     {
-        $stmt = $this->db->prepare('SELECT ev.id, ev.user_id, ev.email, u.display_name FROM email_verifications ev INNER JOIN users u ON u.id = ev.user_id WHERE ev.token_hash = :token_hash AND ev.used_at IS NULL AND ev.expires_at > NOW() LIMIT 1');
+        $stmt = $this->db->prepare('SELECT id, user_id, email FROM email_verifications WHERE token_hash = :token_hash AND used_at IS NULL AND expires_at > NOW() LIMIT 1');
         $stmt->execute(['token_hash' => $tokenHash]);
         $record = $stmt->fetch();
 
