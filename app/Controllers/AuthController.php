@@ -248,31 +248,37 @@ final class AuthController extends Controller
             $this->redirect('/verification/resend');
         }
 
-        $tokenHash = hash('sha256', $token);
-        $verificationModel = new EmailVerification($this->db);
-        $verification = $verificationModel->consumeValidToken($tokenHash);
+        try {
+            $tokenHash = hash('sha256', $token);
+            $verificationModel = new EmailVerification($this->db);
+            $verification = $verificationModel->consumeValidToken($tokenHash);
 
-        if (!$verification) {
-            Session::flash('error', 'Dieser Bestätigungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+            if (!$verification) {
+                Session::flash('error', 'Dieser Bestätigungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+                $this->redirect('/verification/resend');
+            }
+
+            $userModel = new User($this->db);
+            $applied = $userModel->applyVerifiedPendingEmail((int) $verification['user_id'], (string) $verification['email']);
+
+            if (!$applied) {
+                $userModel->markEmailVerified((int) $verification['user_id']);
+                Session::flash('success', 'Deine E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
+                $this->redirect('/login');
+            }
+
+            if ((int) ($_SESSION['user_id'] ?? 0) === (int) $verification['user_id']) {
+                Session::flash('success', 'Deine neue E-Mail-Adresse wurde erfolgreich bestätigt.');
+                $this->redirect('/settings');
+            }
+
+            Session::flash('success', 'Deine neue E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
+            $this->redirect('/login');
+        } catch (Throwable $exception) {
+            Logger::error('Email verification failed unexpectedly', ['exception' => $exception->getMessage()]);
+            Session::flash('error', 'Der Bestätigungslink konnte gerade nicht verarbeitet werden. Bitte fordere einen neuen Link an.');
             $this->redirect('/verification/resend');
         }
-
-        $userModel = new User($this->db);
-        $applied = $userModel->applyVerifiedPendingEmail((int) $verification['user_id'], (string) $verification['email']);
-
-        if (!$applied) {
-            $userModel->markEmailVerified((int) $verification['user_id']);
-            Session::flash('success', 'Deine E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
-            $this->redirect('/login');
-        }
-
-        if ((int) ($_SESSION['user_id'] ?? 0) === (int) $verification['user_id']) {
-            Session::flash('success', 'Deine neue E-Mail-Adresse wurde erfolgreich bestätigt.');
-            $this->redirect('/settings');
-        }
-
-        Session::flash('success', 'Deine neue E-Mail-Adresse wurde erfolgreich bestätigt. Du kannst dich jetzt anmelden.');
-        $this->redirect('/login');
     }
 
     public function showForgotPassword(): void
