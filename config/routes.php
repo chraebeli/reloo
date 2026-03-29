@@ -47,6 +47,7 @@ $router->post('/groups/join', [GroupController::class, 'join']);
 $router->get('/items', [ItemController::class, 'index']);
 $router->get('/items/new', [ItemController::class, 'createForm']);
 $router->post('/items/create', [ItemController::class, 'create']);
+$router->post('/items/suggest-from-image', [ItemController::class, 'suggestFromImage']);
 $router->get('/items/show', [ItemController::class, 'show']);
 $router->post('/items/delete', [ItemController::class, 'delete']);
 
