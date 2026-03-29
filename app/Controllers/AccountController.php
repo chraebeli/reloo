@@ -63,6 +63,10 @@ final class AccountController extends Controller
         }
 
         $userModel = new User($this->db);
+        if (!$userModel->pendingEmailFeatureEnabled()) {
+            Session::flash('error', 'E-Mail-Änderung ist erst nach Einspielen der neuesten Datenbank-Migration verfügbar.');
+            $this->redirect('/settings');
+        }
         $user = $userModel->findById((int) $_SESSION['user_id']);
         if (!$user) {
             $this->redirect('/logout');
@@ -95,6 +99,11 @@ final class AccountController extends Controller
         verify_csrf();
 
         $userModel = new User($this->db);
+        if (!$userModel->pendingEmailFeatureEnabled()) {
+            Session::flash('error', 'E-Mail-Änderung ist erst nach Einspielen der neuesten Datenbank-Migration verfügbar.');
+            $this->redirect('/settings');
+        }
+
         $user = $userModel->findById((int) $_SESSION['user_id']);
         if (!$user || empty($user['pending_email'])) {
             Session::flash('error', 'Es ist aktuell keine E-Mail-Änderung offen.');
